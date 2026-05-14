@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>编程规划智能考核系统</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="site-header">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">◆</span>
+        <div>
+          <h1>编程规划智能考核系统</h1>
+          <p class="tagline">学习规划 · 赛考规划 · 答疑能力 · 一体化智能评审</p>
+          <p class="tagline tagline-sub hidden" id="persist-hint" aria-live="polite"></p>
+        </div>
+      </div>
+      <nav class="header-actions">
+        <button type="button" class="btn btn-ghost" id="btn-show-rules">评分规则</button>
+        <button type="button" class="btn btn-ghost" id="btn-new-assessment">新建考核</button>
+        <button type="button" class="btn btn-ghost" id="btn-admin-entry">管理员入口</button>
+      </nav>
+    </header>
+
+    <main id="main-view">
+      <!-- Step 1: Info -->
+      <section class="card step-panel" id="step-info" data-step="1">
+        <div class="step-badge">步骤 1 / 4</div>
+        <h2>信息录入</h2>
+        <p class="muted">请填写考核老师与学员基本信息，用于个性化评审与政策语境匹配。</p>
+
+        <fieldset class="fieldset">
+          <legend>考核老师</legend>
+          <div class="grid-2">
+            <label class="field">
+              <span>考核姓名 <abbr title="必填">*</abbr></span>
+              <input type="text" id="teacher-name" required maxlength="40" placeholder="例如：张楠" />
+            </label>
+            <label class="field">
+              <span>所在城市 <abbr title="必填">*</abbr></span>
+              <input type="text" id="teacher-city" required maxlength="40" placeholder="例如：南京市" />
+            </label>
+          </div>
+        </fieldset>
+
+        <fieldset class="fieldset">
+          <legend>学员信息</legend>
+          <div class="grid-2">
+            <label class="field">
+              <span>学员姓名 <abbr title="必填">*</abbr></span>
+              <input type="text" id="student-name" required maxlength="40" />
+            </label>
+            <label class="field">
+              <span>年龄 <abbr title="必填">*</abbr></span>
+              <input type="number" id="student-age" required min="3" max="18" value="10" />
+            </label>
+            <label class="field">
+              <span>性别 <abbr title="必填">*</abbr></span>
+              <select id="student-gender" required>
+                <option value="男">男</option>
+                <option value="女">女</option>
+                <option value="不愿透露">不愿透露</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>年级 <abbr title="必填">*</abbr></span>
+              <select id="student-grade" required></select>
+            </label>
+            <label class="field">
+              <span>省份 <abbr title="必填">*</abbr></span>
+              <select id="student-province" required></select>
+            </label>
+            <label class="field">
+              <span>市区 <abbr title="必填">*</abbr></span>
+              <select id="student-city" required></select>
+            </label>
+          </div>
+        </fieldset>
+
+        <div class="actions">
+          <button type="button" class="btn btn-primary" id="btn-to-script">下一步：提交逐字稿</button>
+        </div>
+      </section>
+
+      <!-- Step 2: Script -->
+      <section class="card step-panel hidden" id="step-script" data-step="2">
+        <div class="step-badge">步骤 2 / 4</div>
+        <h2>学习规划与赛考规划 · 逐字稿</h2>
+        <p class="muted">请粘贴面向家长沟通的完整逐字稿。<strong>不少于 800 字</strong>（按字符计数，含标点）。</p>
+
+        <label class="field full">
+          <span>逐字稿正文</span>
+          <textarea id="script-text" rows="18" maxlength="20000" placeholder="在此粘贴逐字稿……"></textarea>
+        </label>
+        <div class="script-meta">
+          <span id="char-count" class="char-count">当前字数：0</span>
+          <span id="char-hint" class="char-hint muted">距离最低要求还差 800 字</span>
+        </div>
+
+        <div class="actions split">
+          <button type="button" class="btn btn-ghost" id="btn-back-info">上一步</button>
+          <button type="button" class="btn btn-primary" id="btn-to-questions">下一步：家长答疑模拟</button>
+        </div>
+      </section>
+
+      <!-- Step 3: Q&A -->
+      <section class="card step-panel hidden" id="step-questions" data-step="3">
+        <div class="step-badge">步骤 3 / 4</div>
+        <h2>家长常见问题 · 现场应答</h2>
+        <p class="muted">系统已根据您的逐字稿与学员画像随机抽取 2 个高频家长追问，请书面作答。</p>
+
+        <div id="questions-container" class="questions-block"></div>
+
+        <div class="actions split">
+          <button type="button" class="btn btn-ghost" id="btn-back-script">上一步</button>
+          <button type="button" class="btn btn-primary" id="btn-run-score">生成智能评分</button>
+        </div>
+      </section>
+
+      <!-- Step 4: Result -->
+      <section class="card step-panel hidden" id="step-result" data-step="4">
+        <div class="step-badge">步骤 4 / 4</div>
+        <h2>智能评分与反馈</h2>
+        <p class="muted">以下结果依据内置严苛量规与地区政策关键词库自动分析生成，仅供培训师考核参考。</p>
+
+        <div class="score-board" id="score-board"></div>
+        <div class="feedback-columns" id="feedback-detail"></div>
+
+        <label class="field full" id="exam-write-token-wrap">
+          <span>考场保存口令（选填）</span>
+          <input
+            type="password"
+            id="exam-write-token"
+            maxlength="120"
+            autocomplete="off"
+            placeholder="培训师若已开启「保存口令」，请向培训师索取后在此填写，再点下方保存。"
+          />
+          <span class="muted small">未开启口令时留空即可。口令不会显示在成绩单上。</span>
+        </label>
+
+        <div class="actions">
+          <button type="button" class="btn btn-primary" id="btn-save-record">保存本次考核记录</button>
+        </div>
+        <p class="muted small" id="save-status"></p>
+      </section>
+    </main>
+
+    <section id="page-rules" class="rules-page card hidden" aria-labelledby="rules-page-title">
+      <div class="rules-page-head">
+        <h2 id="rules-page-title">评分规则说明</h2>
+        <p class="muted">请<strong>在正式考核前</strong>通读。系统按下列维度与权重自动计分；结果页仅展示「亮点信号」与「修改建议 / 风险提示」，不再展示档位提示表。</p>
+        <button type="button" class="btn btn-primary" id="btn-back-rules">返回考核流程</button>
+      </div>
+
+      <div class="rules-prose">
+        <h3>一、总分构成</h3>
+        <ul>
+          <li><strong>学习规划</strong>：单项满分 10 分，权重 <strong>40%</strong></li>
+          <li><strong>赛考规划</strong>：单项满分 10 分，权重 <strong>40%</strong></li>
+          <li><strong>答疑能力</strong>：单项满分 10 分，权重 <strong>20%</strong></li>
+        </ul>
+        <p class="muted">最终总分 = 学习规划得分 × 40% + 赛考规划得分 × 40% + 答疑能力得分 × 20%（满分 10 分，保留小数）。三项短板会明显拉低折算分。</p>
+
+        <h3>二、学习规划（0–10 分）</h3>
+        <p>侧重：是否具备<strong>清晰分阶段学习路径</strong>、知识点与<strong>项目/作品落地</strong>、是否绑定学员<strong>年级/姓名</strong>、是否有<strong>学情侧写</strong>与<strong>思维/能力</strong>拆解、是否交代<strong>长期升学衔接</strong>（如小升初—中考科特—高考/强基等）及机构课程语境。</p>
+        <p><strong>考试收紧（与系统实现一致）：</strong></p>
+        <ul>
+          <li>须出现对学员的<strong>显式短板/薄弱点/不足之处</strong>等诊断表述；若仅有表扬、无不足诊断，该项<strong>封顶 8.5 分</strong>。</li>
+          <li>「仅有辅导/训练营/付费产品」<strong>不能替代</strong>对孩子<strong>学习卡点、畏难、跟不上</strong>等风险的预判；缺少卡点类预判的，高分受限。</li>
+          <li>阶段分层可用「阶段 + 约几个月 / 考级节点」等体现；缺少路径与深度时单项可能封顶 7 分。</li>
+        </ul>
+
+        <h3>三、赛考规划（0–10 分）</h3>
+        <p>侧重：是否点名<strong>具体赛事/考级/白名单</strong>、是否解释<strong>含金量与对比</strong>、是否有<strong>时间节奏</strong>、是否结合<strong>本地省市</strong>与<strong>案例/数据</strong>、是否回应家长对<strong>投入、竞争、付费</strong>等顾虑。</p>
+        <p><strong>考试收紧：</strong>在谈升学、校情、认定时，须出现<strong>合规锚点</strong>类表述（如以<strong>当年官方简章为准</strong>、政策<strong>核实/动态变化</strong>、<strong>最终以</strong>主管部门或学校认定为准等）。缺少此类表述时，该项<strong>封顶 8.5 分</strong>，避免过度承诺。</p>
+
+        <h3>四、答疑能力（0–10 分）</h3>
+        <p>侧重：两道「结合逐字稿 +《编程规划》问题文档」的家长追问之<strong>书面作答</strong>：是否有<strong>分点与可执行方案</strong>、是否<strong>共情</strong>、是否给出<strong>节奏/跟踪</strong>、是否预判<strong>后续追问</strong>、是否回扣<strong>学员画像</strong>；空洞「包过」式短答会严重扣分。</p>
+
+        <h3>五、档位含义（供自评参考）</h3>
+        <p class="muted">不合格 0–2 · 一般 3–5 · 良好 6–7 · 优秀 8–9 · 卓越 10。系统按文本信号与上述收紧规则计分，<strong>不等同人工评委</strong>；如对分项有疑问，以培训师现场解读为准。</p>
+      </div>
+    </section>
+
+    <footer class="site-footer" id="site-footer">
+      <span>编程教培 · 规划话术考核工具</span>
+      <span class="sep">·</span>
+      <span>数据仅存本机浏览器（localStorage）</span>
+      <span class="sep">·</span>
+      <span>请双击运行目录内「启动本地服务.bat」后用浏览器访问（避免直接打开文件导致脚本被拦截）</span>
+    </footer>
+  </div>
+
+  <!-- Admin modal -->
+  <div class="modal hidden" id="modal-admin" role="dialog" aria-modal="true" aria-labelledby="admin-title">
+    <div class="modal-backdrop" data-close-modal></div>
+    <div class="modal-card modal-card--admin">
+      <h2 id="admin-title">管理员 · 历史考核记录</h2>
+      <form id="admin-login-form" class="admin-login">
+        <label class="field full">
+          <span>管理员密码</span>
+          <input type="password" id="admin-password" autocomplete="current-password" />
+        </label>
+        <button type="submit" class="btn btn-primary">验证并查看</button>
+      </form>
+      <div id="admin-records" class="admin-records hidden"></div>
+      <button type="button" class="btn btn-ghost modal-close" data-close-modal>关闭</button>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var el = document.getElementById("persist-hint");
+      if (!el) return;
+      var port = String(location.port || "");
+      if (port === "3847") {
+        el.textContent = "当前为服务端模式：考核存档写入 Turso 数据库。";
+        el.classList.remove("hidden");
+        return;
+      }
+      if (
+        Object.prototype.hasOwnProperty.call(window, "__PPAIS_API__") &&
+        window.__PPAIS_API__
+      ) {
+        el.textContent = "已连接远程 API：存档将写入服务器数据库。";
+        el.classList.remove("hidden");
+      }
+    })();
+  </script>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

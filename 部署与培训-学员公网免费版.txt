@@ -1,0 +1,158 @@
+================================================================================
+  编程规划智能考核 — 学员在家公网使用（培训师操作手册 · 尽量免费版）
+  文档版本：与当前仓库代码配套；各平台「免费政策」以官网为准，可能变更。
+================================================================================
+
+【一、先搞清楚你要搭什么】
+
+  学员在家用浏览器打开一个 **HTTPS 网址**，完成信息、逐字稿、家长追问作答，
+  生成评分后点「保存」，数据进入 **Turso 云数据库**。培训师用「管理员入口」
+  查看与导出。
+
+  需要三样东西同时工作：
+    ① 网页 + 保存接口：本项目里的 Node 服务（server/server.mjs）—— 自带静态页与 /api
+    ② 数据库：Turso（libSQL）
+    ③ 公网可达：下面任选一种部署方式（免费档通常有「休眠、冷启动、流量限制」）
+
+  数据库密钥（TURSO_AUTH_TOKEN）只能写在服务器环境变量里，绝不能发给学员。
+
+
+【二、培训师正式启用前要改的两类密码】
+
+  1）管理员密码（你看全员记录、导出用）
+     - 改文件：js/storage.js 里的 ADMIN_PASSWORD（改成强口令，仅你或教务知道）
+     - 同步改：server/.env 里的 ADMIN_TOKEN（必须与上面完全一致）
+     - 不要把「管理员入口」链接当学员登录用；学员不需要这个密码。
+
+  2）考场保存口令（学员点「保存」时是否校验 —— 公网强烈建议开启）
+     - 在 server/.env 里设置一行，例如：WRITE_TOKEN=你编的随机长串
+     - 把同一串口令通过微信群/邮件单独发给学员（每期可换）
+     - 学员在结果页填写「考场保存口令」输入框后再点保存（无需控制台）
+     - 若你不设 WRITE_TOKEN：任何人只要猜到网址就能往库里写数据，公网不要用空口令。
+
+
+【三、Turso 免费库（数据库）—— 详细步骤】
+
+  1. 浏览器打开 https://turso.tech/ 注册账号（可用 GitHub 登录）。
+  2. 创建 Organization（默认即可）→ Create database。
+  3. 区域（Region）：学员若主要在大陆，可选离得较近的区（如 ap-northeast 等），
+     以控制台可选列表为准。
+  4. 建好后进入该数据库页面：
+     - 复制 **Database URL**（形如 libsql://....turso.io）
+     - 创建 **Auth Token**（只显示一次，立刻复制保存到密码管理器或本地加密笔记）
+  5. 在本项目 server 目录：
+     - 复制 .env.example 为 .env
+     - 填写 TURSO_DATABASE_URL、TURSO_AUTH_TOKEN
+     - 填写 ADMIN_TOKEN（与 ADMIN_PASSWORD 一致）
+     - 填写 WRITE_TOKEN（公网建议必填）
+  6. 切勿把 .env 提交到 Git；切勿把 token 发到公开聊天。
+
+
+【四、把项目放到 GitHub（多数免费托管要求）】
+
+  1. 在 https://github.com 新建仓库（建议 Private 私人库）。
+  2. 本地用 Git 把 programming-planning-assessment 推上去。
+  3. 确认 .gitignore 已忽略 server/.env（本仓库 server/.gitignore 已包含 .env）。
+  4. 若仓库根目录就是「programming-planning-assessment」文件夹内容，则 Render 里
+     Root Directory 填：server
+     若你把整个 monorepo 推上去且 server 在子路径，按实际路径填写。
+
+
+【五、方案 A：Render.com 免费 Web Service（适合长期挂公网）】
+
+  特点（免费档常见情况，以 Render 官网为准）：
+    - 一段时间无访问会休眠，第一次打开可能慢十几秒（冷启动）。
+    - 每月有免费额度，超额需付费或换方案。
+
+  操作概要：
+
+  1. 登录 https://render.com ，用 GitHub 授权。
+  2. New + → Web Service → Connect 你的 GitHub 仓库。
+  3. 配置项建议：
+     - Name：随意，如 ppias-training
+     - Region：选离学员较近的区域
+     - Branch：main（或你实际分支）
+     - Root Directory：server
+     - Runtime：Node
+     - Build Command：npm install
+     - Start Command：npm start
+     - Instance Type：Free
+  4. Environment（环境变量）在 Render 面板里新增（不要写进代码仓库）：
+     TURSO_DATABASE_URL = （Turso 控制台 URL）
+     TURSO_AUTH_TOKEN = （Turso token）
+     ADMIN_TOKEN = （与 js/storage.js 的 ADMIN_PASSWORD 一致）
+     WRITE_TOKEN = （你发给学员的保存口令，与课堂说明一致）
+     可选：CORS_ORIGIN = 你部署后的 https 主页地址（若前后端同源部署一般不必改）
+  5. 保存并 Deploy。成功后 Render 会给出 https://xxx.onrender.com 类似地址。
+  6. 用浏览器打开该地址，应出现考核首页；按「server/readme-turso.txt」做一遍
+     保存与管理员验证。
+
+  注意：Render 会注入 PORT 环境变量，本项目 server 已使用 process.env.PORT，
+  无需再写死 3847。
+
+
+【六、方案 B：Cloudflare Tunnel（培训师家里/办公室电脑常开 + 免费 HTTPS）】
+
+  适合：你有一台能长期开机的 Windows 电脑，不想付云主机费；愿意装 Cloudflare 隧道。
+
+  概要（具体以 Cloudflare 文档为准）：
+
+  1. 在 Cloudflare 注册，把你的域名 DNS 迁到 Cloudflare（或使用 Cloudflare 子域服务）。
+  2. 本机安装 cloudflared，按官方文档创建 Tunnel，把公网子域指向本机 http://127.0.0.1:3847
+  3. 本机先配置好 server/.env，在本机 server 目录执行 npm start。
+  4. 学员访问 https://你的子域.你的域名/ 。
+
+  限制：你关机或断网则全员不可用；需自己维护开机与网络。
+
+
+【七、方案 C：ngrok（仅适合试讲、验收，不推荐正式多期培训）】
+
+  1. https://ngrok.com 注册，安装 ngrok 客户端。
+  2. 本机 npm start 跑在 3847。
+  3. 执行 ngrok http 3847，得到临时 https 地址发给学员。
+  4. 免费档 URL 常变、有连接与时间限制，正式培训请用方案 A 或 B。
+
+
+【八、学员在家操作步骤（你可原样转发到群公告）】
+
+  1. 用手机或电脑浏览器打开培训师发的 **https 链接**（不要用微信内置浏览器若异常，
+     可点「…」用 Chrome / Edge / Safari 打开）。
+  2. 按页面步骤填写：老师信息、学员信息、逐字稿（满足最低字数）、两道家长追问书面回答。
+  3. 点击「生成智能评分」，阅读结果。
+  4. 若培训师要求「保存口令」：在「考场保存口令」框里输入培训师单独发的口令，
+     再点「保存本次考核记录」。看到成功提示即表示已交卷入库。
+  5. 若保存失败：检查网络、口令是否多空格、是否用了正确链接；仍失败把截图发给培训师。
+  6. 不要使用「新建考核」清空已填内容后再抱怨未保存；交卷前确认已点保存。
+
+
+【九、培训师课后阅卷与导出】
+
+  1. 打开同一套 https 站点 → 管理员入口。
+  2. 输入 ADMIN_TOKEN（与 .env 一致）。
+  3. 筛选、勾选记录 → 批量下载 JSON 或 CSV。
+  4. 在 Turso 控制台用 SQL 也可按 teacher_name、score_total 等列做简单统计（若已回填）。
+
+
+【十、免费版限制与应对（写进培训说明可减少纠纷）】
+
+  - 云托管休眠：第一次打开慢 → 提前让学员「提前 5 分钟打开链接唤醒」。
+  - Turso 免费档：库数量、行数、请求有上限 → 归档旧期数据、导出后按需清理（慎用全删）。
+  - 本项目无「学员账号体系」：靠自觉与口令防刷；严重防作弊需另行产品化。
+  - 合规：告知学员数据用途与留存；公司内按人事/合规要求保存导出文件。
+
+
+【十一、常见问题】
+
+  Q：学员保存 401 / write token？
+  A：.env 里开了 WRITE_TOKEN 但学员未填或填错；或你改了口令未通知当期学员。
+
+  Q：管理员进去是空的？
+  A：ADMIN_TOKEN 与 ADMIN_PASSWORD 不一致；或学员其实写进了别的环境/旧链接。
+
+  Q：想换 Turso 库或 token？
+  A：在 Turso 轮换 token，更新托管平台环境变量，Redeploy / 重启本机服务。
+
+================================================================================
+  若你希望「学员链接固定短域名」「一期一口令自动轮换」等，可在后续迭代里
+  再单独做产品需求清单。
+================================================================================
