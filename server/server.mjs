@@ -123,6 +123,8 @@ async function backfillDenormalizedFromPayload() {
 
 await backfillDenormalizedFromPayload();
 
+const app = express();
+
 /** 允许静态页在其它端口（如 Python 8765）时仍能调用本机 API；生产环境请用 CORS_ORIGIN 收紧 */
 app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", process.env.CORS_ORIGIN || "*");

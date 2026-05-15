@@ -62,7 +62,6 @@ function init() {
   document.getElementById("btn-to-questions").addEventListener("click", onToQuestions);
   document.getElementById("btn-back-script").addEventListener("click", () => showStep("script"));
   document.getElementById("btn-run-score").addEventListener("click", onRunScore);
-  document.getElementById("btn-save-record").addEventListener("click", onSaveRecord);
   document.getElementById("btn-new-assessment").addEventListener("click", resetAll);
   document.getElementById("btn-admin-entry").addEventListener("click", openAdminModal);
   document.getElementById("btn-show-rules").addEventListener("click", showRulesPage);
@@ -197,7 +196,66 @@ function collectAnswers() {
   return areas.map((a) => a.value.trim());
 }
 
-function onRunScore() {
+function buildAssessmentRecord() {
+  const teacher = getTeacher();
+  const student = getStudent();
+  const script = lastScorePayload.script;
+  return {
+    id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
+    createdAt: new Date().toISOString(),
+    schemaVersion: 2,
+    teacher,
+    student,
+    script,
+    scriptMeta: {
+      charCount: script.length,
+      minRequiredChars: MIN_SCRIPT_CHARS,
+    },
+    questions: lastScorePayload.questions,
+    questionItems: currentQuestions.map((q) => ({ id: q.id, text: q.text })),
+    answers: lastScorePayload.answers,
+    scores: {
+      total: lastResult.total,
+      learning: lastResult.learning,
+      competition: lastResult.competition,
+      qna: lastResult.qna,
+      tierLearning: lastResult.tierLearning,
+      tierCompetition: lastResult.tierCompetition,
+      tierQna: lastResult.tierQna,
+    },
+    summary: lastResult.summary,
+    feedbackDetail: lastResult.detail,
+    scoreResult: cloneForRecord(lastResult),
+  };
+}
+
+async function persistAssessmentRecord() {
+  if (!lastScorePayload || !lastResult) return;
+  const err = validateInfo();
+  if (err) {
+    recordSaved = false;
+    els.saveStatus.textContent = `未存档：${err}`;
+    toast(`评分已生成，因信息未通过校验未存档：${err}`);
+    return;
+  }
+  const rec = buildAssessmentRecord();
+  try {
+    await saveRecord(rec);
+    recordSaved = true;
+    els.saveStatus.textContent = usesRemotePersistence()
+      ? "本次考核已自动保存至服务器数据库。可在「管理员入口」查看历史。"
+      : "本次考核已自动保存至本机浏览器。可在「管理员入口」查看历史。";
+  } catch (e) {
+    recordSaved = false;
+    els.saveStatus.textContent = "";
+    toast(`评分已生成，但存档失败：${e?.message || e}`);
+  }
+}
+
+async function onRunScore() {
+  const infoErr = validateInfo();
+  if (infoErr) return toast(infoErr);
+
   const answers = collectAnswers();
   if (answers.some((a) => a.length < 20)) {
     return toast("每个问题的回答建议不少于 20 字，请补充后再生成评分。");
@@ -208,8 +266,9 @@ function onRunScore() {
   lastResult = scoreAssessment({ script, student, answers });
   recordSaved = false;
   renderResult(lastResult);
-  els.saveStatus.textContent = "";
+  els.saveStatus.textContent = "正在保存考核记录…";
   showStep("result");
+  await persistAssessmentRecord();
 }
 
 function renderResult(res) {
@@ -264,62 +323,6 @@ function fb(title, tier, score, d) {
       <p class="muted" style="margin:12px 0 6px;font-weight:600;">修改建议 / 风险提示</p>
       <ul>${issues}</ul>
     </div>`;
-}
-
-async function onSaveRecord() {
-  if (!lastScorePayload || !lastResult) {
-    return toast("请先生成评分再保存。");
-  }
-  const teacher = getTeacher();
-  const err = validateInfo();
-  if (err) return toast(err);
-
-  const student = getStudent();
-  const script = lastScorePayload.script;
-  const rec = {
-    id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
-    createdAt: new Date().toISOString(),
-    schemaVersion: 2,
-    teacher,
-    student,
-    script,
-    /** 与逐字稿步骤一致的字数信息 */
-    scriptMeta: {
-      charCount: script.length,
-      minRequiredChars: MIN_SCRIPT_CHARS,
-    },
-    /** 家长追问题干（纯文本，与导出 CSV 列 question_1/2 对齐） */
-    questions: lastScorePayload.questions,
-    /** 完整题目快照（含题库 id，便于审计） */
-    questionItems: currentQuestions.map((q) => ({ id: q.id, text: q.text })),
-    answers: lastScorePayload.answers,
-    scores: {
-      total: lastResult.total,
-      learning: lastResult.learning,
-      competition: lastResult.competition,
-      qna: lastResult.qna,
-      tierLearning: lastResult.tierLearning,
-      tierCompetition: lastResult.tierCompetition,
-      tierQna: lastResult.tierQna,
-    },
-    summary: lastResult.summary,
-    /** 分项亮点、修改建议（与结果页一致） */
-    feedbackDetail: lastResult.detail,
-    /** 评分引擎完整输出（总分、各维分数/档位/亮点/问题列表等），与 scores、summary、feedbackDetail 同源 */
-    scoreResult: cloneForRecord(lastResult),
-  };
-  try {
-    const wtEl = document.getElementById("exam-write-token");
-    const writeToken = wtEl instanceof HTMLInputElement ? wtEl.value.trim() : "";
-    await saveRecord(rec, { writeToken });
-    recordSaved = true;
-    els.saveStatus.textContent = usesRemotePersistence()
-      ? "已保存到服务器数据库。管理员可在「管理员入口」查看全部历史。"
-      : "已保存到本机。管理员可在「管理员入口」查看全部历史。";
-    toast("保存成功。");
-  } catch (e) {
-    toast(`保存失败：${e?.message || e}`);
-  }
 }
 
 function resetAll() {

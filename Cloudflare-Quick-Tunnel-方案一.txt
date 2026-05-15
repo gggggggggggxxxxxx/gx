@@ -1,0 +1,54 @@
+================================================================================
+  方案一：Cloudflare Quick Tunnel（不绑卡、免费 HTTPS）
+  适用：本机或办公室电脑能运行 npm start，并愿意开课期间保持开机联网。
+================================================================================
+
+【一、安装 cloudflared（只需做一次）】
+
+  1. 打开浏览器下载 Windows 版（选 amd64 即可，多数电脑适用）：
+     https://github.com/cloudflare/cloudflared/releases
+     文件名类似：cloudflared-windows-amd64.exe
+
+  2. 下载后改名为 cloudflared.exe，放到下面任一位置：
+     - 已加入 PATH 的文件夹（例如 Git 安装目录下的 mingw 等，不推荐新手），或
+     - 本项目的 programming-planning-assessment 文件夹里（与「启动Cloudflare快速隧道.bat」同目录）
+
+  3. 在 PowerShell 里执行（若已加入 PATH 可跳过）：
+     将 cloudflared.exe 所在目录临时加入 PATH，或直接用全路径运行。
+
+【二、每次给学员开课前（两个窗口同时开着）】
+
+  窗口 A —— 跑考核 + Turso 服务（与平时本机一样）：
+    cd 你的路径\programming-planning-assessment\server
+    npm start
+    看到：PPAIS + Turso: http://127.0.0.1:3847/
+
+  窗口 B —— 开公网隧道（不要关，关了学员就打不开）：
+    cloudflared tunnel --url http://127.0.0.1:3847
+
+  几秒后，窗口 B 里会出现一行：
+    https://xxxxxxxx.trycloudflare.com
+  把这一整段 https 链接复制下来，发微信群 / 邮件给学员即可。
+
+  也可双击运行项目根目录下的：启动Cloudflare快速隧道.bat
+  （需 cloudflared 在 PATH 或与 bat 同目录）
+
+【三、学员怎么用】
+
+  用手机或电脑浏览器打开你发的 https://xxxx.trycloudflare.com
+  正常完成考核、保存；管理员入口仍用你设的 ADMIN 密码。
+
+  若 server\.env 里设置了 WRITE_TOKEN，学员须在步骤 3「考场保存口令」填对后再点「生成智能评分」。
+
+【四、务必知道的限制】
+
+  - 每次重新运行 cloudflared，链接通常会变；每期课可发新链接。
+  - 关掉 cloudflared 或关机，链接立刻不可用。
+  - Quick Tunnel 适合培训/内测，不适合 SLA 很高的生产业务。
+
+【五、代码说明（已改好）】
+
+  通过 *.trycloudflare.com 访问时，前端会自动走同域 /api，写入 Turso；
+  页眉下会显示「当前通过 Cloudflare 隧道访问…」提示。
+
+================================================================================

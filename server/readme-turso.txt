@@ -9,7 +9,7 @@ Turso（libSQL）对接说明
    - ADMIN_TOKEN 须与前端 js/storage.js 里的 ADMIN_PASSWORD 一致（默认 xrx101）
 
 3. 可选：在 .env 中设置 WRITE_TOKEN，则保存考核记录时须携带相同口令：
-   - 学员在结果页「考场保存口令」输入框填写（推荐），或
+   - 学员在步骤 3「考场保存口令」输入框填写后，再点「生成智能评分」（推荐），或
    - 浏览器控制台设置 window.__PPAIS_WRITE_TOKEN__
    未设置 WRITE_TOKEN 时，任意人均可 POST 写入（公网强烈不建议）。
 
@@ -27,10 +27,8 @@ Turso（libSQL）对接说明
    - 终端出现「PPAIS + Turso: http://127.0.0.1:3847/」且不要关窗口（关了就停服）。
    - 浏览器只打开 http://127.0.0.1:3847/（不要用 8765 的 Python 服务，除非已按上文配置 __PPAIS_API__）。
    - 页眉下应出现一行蓝字提示：当前为服务端模式…（表示前端会走 /api/records）。
-   - 完整走一遍考核流程，在结果页点「保存」；再打开「管理员入口」，密码与 ADMIN_TOKEN 一致，应能看到刚保存的记录。
-   - 若设置了 WRITE_TOKEN：保存前须在控制台执行
-     window.__PPAIS_WRITE_TOKEN__ = '与 .env 里 WRITE_TOKEN 相同的值'
-     否则保存会失败。
+   - 完整走一遍考核流程，点「生成智能评分」后应自动入库；再打开「管理员入口」，密码与 ADMIN_TOKEN 一致，应能看到记录。
+   - 若设置了 WRITE_TOKEN：学员须在步骤 3 填口令后再点「生成智能评分」，否则存档会失败。
 
 7. 日常关闭
    - 在运行 npm start 的终端按 Ctrl+C 停止服务。

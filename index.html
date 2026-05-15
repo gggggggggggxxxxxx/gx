@@ -131,21 +131,6 @@
         <div class="score-board" id="score-board"></div>
         <div class="feedback-columns" id="feedback-detail"></div>
 
-        <label class="field full" id="exam-write-token-wrap">
-          <span>考场保存口令（选填）</span>
-          <input
-            type="password"
-            id="exam-write-token"
-            maxlength="120"
-            autocomplete="off"
-            placeholder="培训师若已开启「保存口令」，请向培训师索取后在此填写，再点下方保存。"
-          />
-          <span class="muted small">未开启口令时留空即可。口令不会显示在成绩单上。</span>
-        </label>
-
-        <div class="actions">
-          <button type="button" class="btn btn-primary" id="btn-save-record">保存本次考核记录</button>
-        </div>
         <p class="muted small" id="save-status"></p>
       </section>
     </main>
@@ -189,10 +174,6 @@
 
     <footer class="site-footer" id="site-footer">
       <span>编程教培 · 规划话术考核工具</span>
-      <span class="sep">·</span>
-      <span>数据仅存本机浏览器（localStorage）</span>
-      <span class="sep">·</span>
-      <span>请双击运行目录内「启动本地服务.bat」后用浏览器访问（避免直接打开文件导致脚本被拦截）</span>
     </footer>
   </div>
 
@@ -218,8 +199,12 @@
       var el = document.getElementById("persist-hint");
       if (!el) return;
       var port = String(location.port || "");
-      if (port === "3847") {
-        el.textContent = "当前为服务端模式：考核存档写入 Turso 数据库。";
+      var host = String(location.hostname || "");
+      var isRemoteHost = /\.trycloudflare\.com$/i.test(host) || /\.onrender\.com$/i.test(host);
+      if (port === "3847" || isRemoteHost) {
+        el.textContent = /\.trycloudflare\.com$/i.test(host)
+          ? "当前通过 Cloudflare 隧道访问：考核存档写入 Turso 数据库。"
+          : "当前为服务端模式：考核存档写入 Turso 数据库。";
         el.classList.remove("hidden");
         return;
       }

@@ -10,6 +10,13 @@ function apiPrefix() {
     if (v === "") return "";
     return String(v).replace(/\/$/, "");
   }
+  /** 与 Node 同域托管：Cloudflare Quick Tunnel / Render 等 */
+  if (typeof location !== "undefined" && location.hostname) {
+    const h = location.hostname;
+    if (/\.trycloudflare\.com$/i.test(h) || /\.onrender\.com$/i.test(h)) {
+      return "";
+    }
+  }
   if (typeof location !== "undefined" && String(location.port) === "3847") return "";
   return null;
 }

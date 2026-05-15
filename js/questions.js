@@ -1,9 +1,7 @@
 /**
- * 家长追问：先挂钩逐字稿，再引用《编程规划》问题文档中的典型家长问法。
- * 共 2 题；每次从文档池中随机抽取（与逐字稿有命中的题会进入随机池前列，但仍非固定）。
+ * 家长追问：从《编程规划》问题文档池中随机抽取 2 题；
+ * 与逐字稿有命中的题会进入随机池前列，但仍非固定。
  */
-
-const MAX_HOOK = 76;
 
 /** 文档条目：matchers 仅用于把题目分进「相关池」，选题顺序仍随机 */
 const DOC_QUESTIONS = [
@@ -16,8 +14,7 @@ const DOC_QUESTIONS = [
   {
     id: "pol-2",
     matchers: [/小升初/u, /简历|摇号|开放日|面谈|初中/u],
-    docAsk:
-      "小升初有没有政策？编程如何助力小升初？要求赛事要达到什么水平？",
+    docAsk: "小升初有没有政策？编程如何助力小升初？要求赛事要达到什么水平？",
   },
   {
     id: "pol-3",
@@ -88,10 +85,6 @@ const DOC_QUESTIONS = [
  */
 export function pickParentQuestions(ctx) {
   const script = (ctx.script || "").trim();
-  const student = ctx.student || {};
-  const name = student.name || "孩子";
-  const hooks = shuffleArray(extractScriptHooks(script, 8)).slice(0, 2);
-  while (hooks.length < 2) hooks.push(hooks[0] || "");
 
   const scored = DOC_QUESTIONS.map((item) => ({
     item,
@@ -101,15 +94,12 @@ export function pickParentQuestions(ctx) {
   const matched = scored.filter((x) => x.score > 0);
   const unmatched = scored.filter((x) => x.score === 0);
   const pool = [...shuffleArray(matched), ...shuffleArray(unmatched)];
-  const picks = pool.slice(0, 2).map((x, i) => ({
-    item: x.item,
-    hook: hooks[i] || hooks[0] || "",
-  }));
+  const picks = pool.slice(0, 2);
   const ordered = shuffleArray(picks);
 
-  return ordered.map((p, idx) => ({
-    id: p.item.id,
-    text: formatQuestion(name, p.hook, p.item.docAsk, idx + 1),
+  return ordered.map((x) => ({
+    id: x.item.id,
+    text: x.item.docAsk,
   }));
 }
 
@@ -121,47 +111,4 @@ function shuffleArray(arr) {
     [a[i], a[j]] = [a[j], a[i]];
   }
   return a;
-}
-
-function formatQuestion(name, hook, docAsk, num) {
-  const hookLine = hook
-    ? `结合您刚才的逐字稿，其中约这样表述：「${hook}」。`
-    : `结合您刚才的逐字稿整体内容（${name}的学习与赛考规划）。`;
-
-  return (
-    `${hookLine}\n\n` +
-    `下面是《编程规划》问题文档中的典型家长追问（第 ${num} 题），请您书面作答：\n` +
-    `「${docAsk}」`
-  );
-}
-
-/** 从逐字稿中截取 1～2 句与考核相关的「挂钩」短句，便于与文档问题衔接 */
-function extractScriptHooks(script, count) {
-  const patterns = [
-    /[^。\n]{6,90}?(科技特长生|科特|认定|招生简章)[^。\n]{0,50}?[。\n]?/u,
-    /[^。\n]{6,90}?(小升初|简历|摇号|开放日|面谈|初中|科创班|实验班)[^。\n]{0,50}?[。\n]?/u,
-    /[^。\n]{6,90}?(YCL|考级|图灵杯|白名单|蓝桥|信奥|CSP|强基)[^。\n]{0,50}?[。\n]?/u,
-    /[^。\n]{6,90}?(图形化|Scratch|Python|C\+\+|算法|思维)[^。\n]{0,50}?[。\n]?/u,
-    /[^。\n]{6,90}?(核桃|通过率|工信部|电子教育学会|双章|光华)[^。\n]{0,50}?[。\n]?/u,
-    /[^。\n]{6,90}?(省重点|市重点|降分|招生|人)[^。\n]{0,30}?[。\n]?/u,
-  ];
-
-  const hooks = [];
-  for (const re of patterns) {
-    const m = script.match(re);
-    if (!m) continue;
-    let s = m[0].replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim();
-    if (s.length > MAX_HOOK) s = s.slice(0, MAX_HOOK - 1) + "…";
-    if (s && !hooks.includes(s)) hooks.push(s);
-    if (hooks.length >= count) return hooks;
-  }
-
-  if (hooks.length === 0 && script.length) {
-    let head = script.replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim().slice(0, MAX_HOOK);
-    if (script.length > MAX_HOOK) head += "…";
-    hooks.push(head || "（逐字稿内容）");
-  }
-
-  while (hooks.length < count && hooks[0]) hooks.push(hooks[0]);
-  return hooks.slice(0, count);
 }
