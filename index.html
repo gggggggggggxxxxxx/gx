@@ -32,7 +32,7 @@
       <section class="card step-panel" id="step-info" data-step="1">
         <div class="step-badge">步骤 1 / 4</div>
         <h2>信息录入</h2>
-        <p class="muted">请填写考核老师与学员基本信息，用于个性化评审与政策语境匹配。</p>
+        <p class="muted">请填写考核老师与学员基本信息，用于个性化评审、政策语境匹配及<strong>课程口径审计</strong>（所选线路与阶段决定哪些「产品与赛考」校验规则生效；多线对比稿请选「多线/未锁定」）。</p>
 
         <fieldset class="fieldset">
           <legend>考核老师</legend>
@@ -79,7 +79,18 @@
               <span>市区 <abbr title="必填">*</abbr></span>
               <select id="student-city" required></select>
             </label>
+            <label class="field">
+              <span>线路 <abbr title="必填">*</abbr></span>
+              <select id="student-track-line" required aria-describedby="hint-track-stage"></select>
+            </label>
+            <label class="field">
+              <span>阶段 <abbr title="必填">*</abbr></span>
+              <select id="student-course-stage" required aria-describedby="hint-track-stage"></select>
+            </label>
           </div>
+          <p class="muted small" id="hint-track-stage" style="margin:0 0 12px;">
+            请按本稿<strong>主线</strong>选择：例如主推思维线图形化种子班则选「思维线 + 图形化」；一讲稿内对比思维与科特、或同时涉及图形化与 Python 时，建议选「多线或未锁定」与「多阶段或未锁定」。
+          </p>
         </fieldset>
 
         <div class="actions">
@@ -150,6 +161,8 @@
           <li><strong>答疑能力</strong>：单项满分 10 分，权重 <strong>20%</strong></li>
         </ul>
         <p class="muted">最终总分 = 学习规划得分 × 40% + 赛考规划得分 × 40% + 答疑能力得分 × 20%（满分 10 分，保留小数）。三项短板会明显拉低折算分。</p>
+        <p class="muted">系统会将<strong>逐字稿 + 两道答疑</strong>与内置课程体系口径做一致性扫描：若出现明显矛盾（如思维线图形化写成 60 课时、Python 退费写成前 10 等），会在结果页<strong>单独列出并分项扣分</strong>（各维度累计扣分有封顶）。</p>
+        <p class="muted">步骤 1 中学员的<strong>线路 + 阶段</strong>会作为「课程口径审计」的参照：选具体组合时<strong>仅启用与该组合相关的校验规则</strong>；选「多线或未锁定」「多阶段或未锁定」时与未填写等效，仍按全文规则检测。</p>
 
         <h3>二、学习规划（0–10 分）</h3>
         <p>侧重：是否具备<strong>清晰分阶段学习路径</strong>、知识点与<strong>项目/作品落地</strong>、是否绑定学员<strong>年级/姓名</strong>、是否有<strong>学情侧写</strong>与<strong>思维/能力</strong>拆解、是否交代<strong>长期升学衔接</strong>（如小升初—中考科特—高考/强基等）及机构课程语境。</p>

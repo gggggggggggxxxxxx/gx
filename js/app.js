@@ -1,4 +1,4 @@
-import { GRADES, PROVINCES, citiesForProvince } from "./data.js";
+import { GRADES, TRACK_LINES, COURSE_STAGES, PROVINCES, citiesForProvince } from "./data.js";
 import { pickParentQuestions } from "./questions.js";
 import { scoreAssessment } from "./scoring.js";
 import {
@@ -23,6 +23,8 @@ const els = {
   studentGrade: document.getElementById("student-grade"),
   studentProvince: document.getElementById("student-province"),
   studentCity: document.getElementById("student-city"),
+  studentTrackLine: document.getElementById("student-track-line"),
+  studentCourseStage: document.getElementById("student-course-stage"),
   scriptText: document.getElementById("script-text"),
   charCount: document.getElementById("char-count"),
   charHint: document.getElementById("char-hint"),
@@ -51,6 +53,10 @@ let adminFilterDebounce = null;
 function init() {
   fillSelect(els.studentGrade, GRADES);
   fillSelect(els.studentProvince, PROVINCES);
+  fillSelect(els.studentTrackLine, TRACK_LINES);
+  fillSelect(els.studentCourseStage, COURSE_STAGES);
+  els.studentTrackLine.value = "多线或未锁定";
+  els.studentCourseStage.value = "多阶段或未锁定";
   refreshCitySelect();
 
   els.studentProvince.addEventListener("change", refreshCitySelect);
@@ -146,6 +152,8 @@ function getStudent() {
     grade: els.studentGrade.value,
     province: els.studentProvince.value,
     city: els.studentCity.value,
+    trackLine: els.studentTrackLine.value,
+    courseStage: els.studentCourseStage.value,
   };
 }
 
@@ -155,6 +163,8 @@ function validateInfo() {
   if (!t.name || !t.city) return "请填写考核老师的姓名与所在城市。";
   if (!s.name) return "请填写学员姓名。";
   if (!Number.isFinite(s.age) || s.age < 3 || s.age > 18) return "学员年龄需在 3–18 岁之间。";
+  if (!s.trackLine || !TRACK_LINES.includes(s.trackLine)) return "请选择学员本次考核主线对应的线路（思维线 / 科特线 / 多线或未锁定）。";
+  if (!s.courseStage || !COURSE_STAGES.includes(s.courseStage)) return "请选择学员本次考核主线对应的阶段（图形化 / Python / 多阶段或未锁定）。";
   return null;
 }
 
@@ -272,13 +282,28 @@ async function onRunScore() {
 }
 
 function renderResult(res) {
-  const { total, learning, competition, qna, tierLearning, tierCompetition, tierQna, summary, detail } = res;
+  const {
+    total,
+    learning,
+    competition,
+    qna,
+    tierLearning,
+    tierCompetition,
+    tierQna,
+    summary,
+    detail,
+    courseKnowledge,
+    declaration,
+  } = res;
 
   els.scoreBoard.innerHTML = `
     <div class="score-total">
       <div class="big">${total.toFixed(2)}</div>
       <div class="label">最终总分 / 10<br/><span style="font-size:0.78rem;opacity:.85">学习×40% + 赛考×40% + 答疑×20%</span></div>
     </div>
+    <p class="score-declaration muted small" style="margin:12px 0 0;text-align:center;line-height:1.5;">
+      课程口径审计参照：<strong>${escapeHtml(declaration?.trackLine || "—")}</strong> · <strong>${escapeHtml(declaration?.courseStage || "—")}</strong>
+    </p>
     <div class="score-bars">
       ${barRow("学习规划", learning, 10)}
       ${barRow("赛考规划", competition, 10)}
@@ -292,11 +317,17 @@ function renderResult(res) {
     fb("答疑能力", tierQna, qna, detail.qna),
   ];
 
+  const courseKbCard =
+    courseKnowledge && courseKnowledge.findings && courseKnowledge.findings.length > 0
+      ? courseKnowledgeCardHtml(courseKnowledge)
+      : "";
+
   els.feedbackDetail.innerHTML = `
     <div class="fb-card" style="grid-column:1/-1;background:rgba(61,156,245,0.08);border-color:rgba(61,156,245,0.25);">
       <h3>综合评语</h3>
-      <p class="muted" style="margin:0;white-space:pre-wrap;">${escapeHtml(summary)}</p>
+      <p class="muted" style="margin:0;white-space:pre-wrap;">${formatInlineBold(escapeHtml(summary))}</p>
     </div>
+    ${courseKbCard}
     ${blocks.join("")}
   `;
 }
@@ -313,7 +344,7 @@ function barRow(label, value, max) {
 
 function fb(title, tier, score, d) {
   const strengths = (d.strengths || []).map((s) => `<li>${escapeHtml(s)}</li>`).join("") || "<li>（无明显亮点信号）</li>";
-  const issues = (d.issues || []).map((s) => `<li>${escapeHtml(s)}</li>`).join("") || "<li>（未触发额外扣分说明）</li>";
+  const issues = (d.issues || []).map((s) => `<li>${formatInlineBold(escapeHtml(s))}</li>`).join("") || "<li>（未触发额外扣分说明）</li>";
   return `
     <div class="fb-card">
       <h3>${escapeHtml(title)} · ${score.toFixed(2)} 分</h3>
@@ -322,6 +353,35 @@ function fb(title, tier, score, d) {
       <ul>${strengths}</ul>
       <p class="muted" style="margin:12px 0 6px;font-weight:600;">修改建议 / 风险提示</p>
       <ul>${issues}</ul>
+    </div>`;
+}
+
+/** 将已转义文本中的 **片段** 转为 <strong>（仅用于本系统生成的固定文案） */
+function formatInlineBold(escaped) {
+  return escaped.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+}
+
+function courseKnowledgeCardHtml(ck) {
+  const d = ck.deductions || { learning: 0, competition: 0, qna: 0 };
+  const head = `学习规划 -${d.learning.toFixed(2)} · 赛考规划 -${d.competition.toFixed(2)} · 答疑 -${d.qna.toFixed(2)}（各维度累计封顶后再折算总分）`;
+  const items = (ck.findings || [])
+    .map((f) => {
+      const p = f.penalty || {};
+      const bits = [];
+      if (p.learning > 0) bits.push(`学习 -${p.learning.toFixed(2)}`);
+      if (p.competition > 0) bits.push(`赛考 -${p.competition.toFixed(2)}`);
+      if (p.qna > 0) bits.push(`答疑 -${p.qna.toFixed(2)}`);
+      const meta = bits.join(" · ");
+      const body = formatInlineBold(escapeHtml(f.message || ""));
+      return `<li><span class="course-kb-dim">${escapeHtml(meta)}</span><span class="course-kb-msg">${body}</span></li>`;
+    })
+    .join("");
+  return `
+    <div class="fb-card fb-card--course-kb" style="grid-column:1/-1;">
+      <h3>课程知识一致性</h3>
+      <p class="muted" style="margin:0 0 10px;">以下表述与<strong>教研内置</strong>的课程体系 / 赛考时间线口径不一致，已分项扣分并计入总分。<strong>仅逐字稿检出</strong>的问题不扣答疑分；<strong>仅答疑检出</strong>的问题对学习规划扣罚减轻。</p>
+      <p class="course-kb-head">${escapeHtml(head)}</p>
+      <ul class="course-kb-list">${items}</ul>
     </div>`;
 }
 
@@ -335,6 +395,8 @@ function resetAll() {
   els.studentGrade.selectedIndex = 0;
   els.studentProvince.selectedIndex = 0;
   refreshCitySelect();
+  els.studentTrackLine.value = "多线或未锁定";
+  els.studentCourseStage.value = "多阶段或未锁定";
   els.scriptText.value = "";
   updateCharCount();
   currentQuestions = [];
@@ -547,6 +609,8 @@ async function exportAdminCsv() {
     "student_grade",
     "student_province",
     "student_city",
+    "student_track_line",
+    "student_course_stage",
     "score_total",
     "score_learning",
     "score_competition",
@@ -581,6 +645,8 @@ async function exportAdminCsv() {
       s.grade,
       s.province,
       s.city,
+      s.trackLine ?? "",
+      s.courseStage ?? "",
       sc.total,
       sc.learning,
       sc.competition,
@@ -702,7 +768,8 @@ function adminRecordHtml(r) {
           </header>
           <div class="meta">
             学员：${escapeHtml(s.name || "")} / ${escapeHtml(String(s.age || ""))}岁 / ${escapeHtml(s.gender || "")} /
-            ${escapeHtml(s.grade || "")} / ${escapeHtml(s.province || "")} ${escapeHtml(s.city || "")}
+            ${escapeHtml(s.grade || "")} / ${escapeHtml(s.province || "")} ${escapeHtml(s.city || "")} /
+            ${escapeHtml(s.trackLine || "—")} · ${escapeHtml(s.courseStage || "—")}
           </div>
           <div class="meta">总分 ${escapeHtml(String(sc.total ?? ""))} · 学习 ${escapeHtml(
     String(sc.learning ?? "")

@@ -1,0 +1,11 @@
+{
+  "name": "programming-planning-assessment",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/courseKnowledgeAudit.test.js tests/rules-and-answers.test.js tests/scoring-smoke.test.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

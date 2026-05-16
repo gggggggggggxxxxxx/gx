@@ -3,6 +3,9 @@
  * 三项各 0–10，总分 = 学习×0.4 + 赛考×0.4 + 答疑×0.2
  */
 
+import { auditCourseKnowledge } from "./courseKnowledgeAudit.js";
+import { scriptHasOfficialExamRoadmap } from "./courseExamKnowledge.js";
+
 function clamp(n, a, b) {
   return Math.max(a, Math.min(b, n));
 }
@@ -40,17 +43,52 @@ export function scoreAssessment(input) {
   const competition = scoreCompetition(script, student);
   const qna = scoreQna(combinedAnswers, script, student);
 
-  const total = round2(learning.score * 0.4 + competition.score * 0.4 + qna.score * 0.2);
+  const courseAudit = auditCourseKnowledge(script, combinedAnswers, student);
+  const { findings: courseKnowledgeFindings, totals: courseDeductions } = courseAudit;
+
+  let learnScore = round2(clamp(learning.score - courseDeductions.learning, 0, 10));
+  let compScore = round2(clamp(competition.score - courseDeductions.competition, 0, 10));
+  let qnaScore = round2(clamp(qna.score - courseDeductions.qna, 0, 10));
+
+  if (courseDeductions.learning > 0) {
+    learning.issues.push(
+      `【课程口径】与内置课程体系口径不一致，学习规划项已扣 **${courseDeductions.learning.toFixed(2)}** 分；详见下方「课程知识一致性」清单。`
+    );
+  }
+  if (courseDeductions.competition > 0) {
+    competition.issues.push(
+      `【课程口径】赛考/课时等表述与口径摘要不一致，赛考规划项已扣 **${courseDeductions.competition.toFixed(2)}** 分；详见清单。`
+    );
+  }
+  if (courseDeductions.qna > 0) {
+    qna.issues.push(
+      `【课程口径】答疑中出现与课程体系矛盾的信息，答疑项已扣 **${courseDeductions.qna.toFixed(2)}** 分；详见清单。`
+    );
+  }
+
+  learning.score = learnScore;
+  competition.score = compScore;
+  qna.score = qnaScore;
+
+  const total = round2(learnScore * 0.4 + compScore * 0.4 + qnaScore * 0.2);
 
   return {
     total,
-    learning: learning.score,
-    competition: competition.score,
-    qna: qna.score,
-    tierLearning: tierLabel(learning.score),
-    tierCompetition: tierLabel(competition.score),
-    tierQna: tierLabel(qna.score),
-    summary: buildSummary(learning, competition, qna, total),
+    learning: learnScore,
+    competition: compScore,
+    qna: qnaScore,
+    tierLearning: tierLabel(learnScore),
+    tierCompetition: tierLabel(compScore),
+    tierQna: tierLabel(qnaScore),
+    summary: buildSummary(learning, competition, qna, total, courseKnowledgeFindings),
+    courseKnowledge: {
+      findings: courseKnowledgeFindings,
+      deductions: courseDeductions,
+    },
+    declaration: {
+      trackLine: student.trackLine || "",
+      courseStage: student.courseStage || "",
+    },
     detail: {
       learning: learning,
       competition: competition,
@@ -59,11 +97,16 @@ export function scoreAssessment(input) {
   };
 }
 
-function buildSummary(L, C, Q, total) {
+function buildSummary(L, C, Q, total, courseFindings) {
   const parts = [];
   parts.push(
     `综合判定：最终总分 **${total} / 10**（学习规划 ${L.score}×40% + 赛考规划 ${C.score}×40% + 答疑能力 ${Q.score}×20%）。量规已按「考试收紧档」校准：信息再完整，凡缺学情短板诊断、学习卡点预判或政策合规锚点，学习与赛考单项均不得虚高；与教研范文同档的逐字稿，常见落在约 8–8.5 分区间。`
   );
+  if (courseFindings && courseFindings.length > 0) {
+    parts.push(
+      `**课程知识一致性**：检出 **${courseFindings.length}** 处与当前内置课程体系/赛考时间线明显不符的表述，已按项扣分并在结果页列出具体矛盾点，请按培训师提供的口径材料修订。`
+    );
+  }
   if (total < 6) {
     parts.push("整体仍处于「待达标」区间，建议对照分项修改建议重写逐字稿，并强化答疑中的可执行细节。");
   } else if (total < 8) {
@@ -84,8 +127,10 @@ function scoreLearning(script, student) {
   /** 路径：含分阶段、启蒙、月龄学时等 */
   const rePath =
     /阶段|路径|阶梯|分阶|路线图|规划|学期|学年|寒暑假|第[一二三四五六七八九十\d]+|思维阶段|算法阶段|启蒙|图形化|学完|下册/u;
-  const reKnowledge = /知识点|模块|单元|语法|循环|变量|函数|算法|数据结构|面向对象|顺序|条件|坐标|负数/u;
-  const reProject = /项目|作品|实操|落地|课设|展示|答辩|科创|智能风扇|电子秤|小游戏/u;
+  const reKnowledge =
+    /知识点|模块|单元|语法|循环|变量|函数|算法|数据结构|面向对象|顺序|条件|坐标|负数|克隆|广播|流程图|随机数|正负数|输入输出|列表|字符串/u;
+  const reProject =
+    /项目|作品|实操|落地|课设|展示|答辩|科创|智能风扇|电子秤|小游戏|闯迷宫|飞机大战|打地鼠|计步器|红外警报|氛围灯|自动驾驶|智能门铃|密码锁|BMI|任务清单/u;
   const reAbility = /思维|逻辑|专注|创造力|解决问题|综合素养|竞争力|迁移|举一反三|编程思维/u;
   /** 学情侧写（表扬型）；高分还须 reShortcoming */
   const reSituation =
@@ -95,7 +140,8 @@ function scoreLearning(script, student) {
     /卡点|畏难|厌学|断层|踩坑|瓶颈|反复|跟不上|吃力|难点|风险点|若.*(落后|不足)|万一.*(掉|落)/u;
   const reSupportOnly = /辅导|训练营|冲刺|备赛|稳步|查漏补缺|尽力|付费/u;
   const reLong = /长期|体系|连贯|三年|五年|升学|成长曲线|小升初|中考|高考|强基|后续.*[Pp]ython|C\+\+|python/u;
-  const reWalnut = /核桃|课程体系|课纲|教研|标准课|班上|教学实力/u;
+  const reWalnut =
+    /核桃|课程体系|课纲|教研|标准课|班上|教学实力|种子班|科特|科技特长生实验班|思维线|图形化计算思维|软编|硬件课|赛考课|赛考专项|Python初探|趣味C\+\+|常规C\+\+|信奥/u;
   const reTeachingGrain =
     /工信部|工信|教育与考试中心|电子教育学会|双章|通过率|主办|光华|基金会|部.*直属|中央/u;
   /** 显式短板/不足诊断（考试档 8.5+ 硬条件） */
@@ -254,11 +300,11 @@ function scoreCompetition(script, student) {
     /简章.{0,8}为准|官方.{0,8}为准|公示.{0,8}为准|最终以|核实|政策.{0,8}(调整|变化)|以.{0,6}当年.{0,8}简章|存在.{0,6}不确定|录取.{0,6}以/u;
 
   const reEvent =
-    /YCL|图灵杯|蓝桥|青科赛|NOC|人工智能创新赛|信息素养|电子学会|GESP|等级考试|考级|CSP|NOIP|NOI|信奥|白名单|竞赛|赛事/u;
+    /YCL|YCL一级|YCL二级|YCL四级|YCL五级|图灵杯|蓝桥|青科赛|NOC|人工智能创新赛|信息素养|电子学会|GESP|等级考试|考级|CSP|NOIP|NOI|信奥|白名单|竞赛|赛事|国家级证书|赛考效率/u;
   const reWhite = /白名单|教育部|公示|认定/u;
   const rePolicy = /科技特长生|点招|自主招生|综评|综合素质|小升初|中招|强基|政策|招生简章|认定范围|科创班|实验班|简历|双减/u;
   const reTime =
-    /\d{4}年|\d{2}年|\d{1,2}月|上学期|下学期|暑假|寒假|学期|季度|节点|时间线|倒计时|个月|左右|下册|届时|去年|近年/u;
+    /\d{4}年|\d{2}年|\d{1,2}个月|\d{1,2}月|上学期|下学期|暑假|寒假|学期|季度|节点|时间线|倒计时|个月|左右|下册|届时|去年|近年/u;
   const reCase =
     /案例|学员|获奖|证书|省一|省二|市奖|铜奖|银奖|金奖|晋级|入围|往届|班上|名学员|国赛|一等奖/u;
   const reCompare = /含金量|对比|横向|优先级|择赛|取舍|性价比|适配|挑战性|难度较大|更难|更易|国家级/u;
@@ -342,6 +388,11 @@ function scoreCompetition(script, student) {
   if (reDataCred.test(script)) {
     score += 0.22;
     strengths.push("含通过率、获奖规模等可复核数据。");
+  }
+
+  if (scriptHasOfficialExamRoadmap(script)) {
+    score += 0.42;
+    strengths.push("出现课程体系口径的赛考里程碑（思维/科特 × 图形化或 Python + YCL 等级 +「N 个月」节点），节奏与预期管理更具体。");
   }
 
   score = clamp(score, 0, 10);
