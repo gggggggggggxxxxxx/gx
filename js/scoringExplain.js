@@ -4,7 +4,7 @@
 
 import { scriptHasOfficialExamRoadmap } from "./courseExamKnowledge.js";
 import { runRubric, topMissedForDisplay } from "./rubricEngine.js";
-import { clamp, tierLabel } from "./scoringShared.js";
+import { clamp, scriptBindsStudentRegion, tierLabel } from "./scoringShared.js";
 
 function countHits(text, patterns) {
   return patterns.reduce((acc, re) => acc + (re.test(text) ? 1 : 0), 0);
@@ -207,9 +207,7 @@ export function explainCompetition(script, student) {
   const reSchoolDetail = /招生|简章|特长生|市重点|省重点|降分|\d+人|5\+2|强基|保送/u;
   const reDataCred = /\d{2,}%|\d{3,}名|名学员|人获奖|晋级/u;
 
-  const local =
-    (student.province && script.includes(student.province)) ||
-    (student.city && script.includes(student.city));
+  const local = scriptBindsStudentRegion(script, student);
 
   const result = runRubric({
     base: 3.35,
@@ -478,8 +476,12 @@ export function explainQna(combinedAnswers, student) {
 
 /** @param {object} dim  scoring.js 返回的分项 */
 export function attachExplain(dim, explain) {
+  const strengths = [...new Set([...(dim.strengths || []), ...(explain.strengths || [])])];
+  const issues = [...new Set([...(dim.issues || []), ...(explain.issues || [])])];
   return {
     ...dim,
+    strengths,
+    issues,
     hits: explain.hits,
     missed: explain.missed,
     capReasons: explain.capReasons,

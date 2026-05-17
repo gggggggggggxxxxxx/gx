@@ -3,6 +3,7 @@
  * 三项各 0–10，总分 = 学习×0.4 + 赛考×0.4 + 答疑×0.2
  */
 
+import { buildTraineeFeedback } from "./feedbackDisplay.js";
 import { auditCourseKnowledge } from "./courseKnowledgeAudit.js";
 import { scriptHasOfficialExamRoadmap } from "./courseExamKnowledge.js";
 import {
@@ -17,6 +18,7 @@ import {
   clamp,
   computeWeightedTotal,
   round2,
+  scriptBindsStudentRegion,
   tierLabel,
 } from "./scoringShared.js";
 
@@ -62,7 +64,7 @@ export function scoreAssessment(input) {
 
   const total = computeWeightedTotal(learnScore, compScore, qnaScore);
 
-  return {
+  const result = {
     total,
     learning: learnScore,
     competition: compScore,
@@ -85,6 +87,8 @@ export function scoreAssessment(input) {
       qna: qna,
     },
   };
+  result.trainee = buildTraineeFeedback(result);
+  return result;
 }
 
 function scoreLearning(script, student) {
@@ -278,9 +282,7 @@ function scoreCompetition(script, student) {
   const reCompare = /含金量|对比|横向|优先级|择赛|取舍|性价比|适配|挑战性|难度较大|更难|更易|国家级/u;
   const reWorry = /投入|精力|备考|认可度|跟风|焦虑|风险|理性|付费|额外|摇号|简历|担心|压力|竞争|上万|别担|不用担/u;
 
-  const local =
-    (student.province && script.includes(student.province)) ||
-    (student.city && script.includes(student.city));
+  const local = scriptBindsStudentRegion(script, student);
 
   if (reEvent.test(script)) {
     score += 1.05;

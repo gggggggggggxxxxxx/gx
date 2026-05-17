@@ -1,6 +1,7 @@
 import { chinaFilenameStamp, formatDateTimeChina } from "./dateFormat.js";
 import { GRADES, TRACK_LINES, COURSE_STAGES, PROVINCES, citiesForProvince } from "./data.js";
 import { pickParentQuestions } from "./questions.js";
+import { ensureTraineeFeedback, humanizeIssue } from "./feedbackDisplay.js";
 import { scoreAssessment } from "./scoring.js";
 import {
   loadRecords,
@@ -234,7 +235,7 @@ function buildAssessmentRecord() {
       tierCompetition: lastResult.tierCompetition,
       tierQna: lastResult.tierQna,
     },
-    summary: lastResult.summary,
+    summary: lastResult.trainee?.summary || lastResult.summary,
     feedbackDetail: lastResult.detail,
     scoreResult: cloneForRecord(lastResult),
   };
@@ -294,11 +295,11 @@ function renderResult(res) {
     tierLearning,
     tierCompetition,
     tierQna,
-    summary,
     detail,
     courseKnowledge,
     declaration,
   } = res;
+  const trainee = ensureTraineeFeedback(res);
 
   els.scoreBoard.innerHTML = `
     <div class="score-total">
@@ -306,59 +307,63 @@ function renderResult(res) {
       <div class="label">最终总分 / 10<br/><span style="font-size:0.78rem;opacity:.85">学习×40% + 赛考×40% + 答疑×20%</span></div>
     </div>
     <p class="score-declaration muted small" style="margin:12px 0 0;text-align:center;line-height:1.5;">
-      课程口径审计参照：<strong>${escapeHtml(declaration?.trackLine || "—")}</strong> · <strong>${escapeHtml(declaration?.courseStage || "—")}</strong>
+      ${escapeHtml(trainee.declarationLabel || "您为学员申报的路径")}：<strong>${escapeHtml(declaration?.trackLine || "—")}</strong> · <strong>${escapeHtml(declaration?.courseStage || "—")}</strong>
     </p>
     <div class="score-bars">
       ${barRow("学习规划", learning, 10)}
       ${barRow("赛考规划", competition, 10)}
       ${barRow("答疑能力", qna, 10)}
     </div>
-    ${scoreExplainSummaryHtml(detail)}
+    ${scoreExplainSummaryHtml(detail, trainee)}
   `;
 
   const blocks = [
-    fb("学习规划", tierLearning, learning, detail.learning),
-    fb("赛考规划", tierCompetition, competition, detail.competition),
-    fb("答疑能力", tierQna, qna, detail.qna),
+    fb("学习规划", tierLearning, learning, trainee.learning),
+    fb("赛考规划", tierCompetition, competition, trainee.competition),
+    fb("答疑能力", tierQna, qna, trainee.qna),
   ];
 
   const courseKbCard =
     courseKnowledge && courseKnowledge.findings && courseKnowledge.findings.length > 0
-      ? courseKnowledgeCardHtml(courseKnowledge)
+      ? courseKnowledgeCardHtml(courseKnowledge, trainee.courseFindings)
       : "";
 
   els.feedbackDetail.innerHTML = `
     <div class="fb-card" style="grid-column:1/-1;background:rgba(61,156,245,0.08);border-color:rgba(61,156,245,0.25);">
       <h3>综合评语</h3>
-      <p class="muted" style="margin:0;white-space:pre-wrap;">${formatInlineBold(escapeHtml(summary))}</p>
+      <p class="muted" style="margin:0;white-space:pre-wrap;">${formatInlineBold(escapeHtml(trainee.summary))}</p>
     </div>
     ${courseKbCard}
     ${blocks.join("")}
   `;
 }
 
-function dimOneLiner(d) {
+function dimOneLiner(d, traineeDim) {
+  const priority = traineeDim?.priorityIssues || [];
+  if (priority.length > 0) {
+    return priority[0].slice(0, 36) + (priority[0].length > 36 ? "…" : "");
+  }
   const missed = d?.displayMissed || [];
   if (missed.length === 0) {
     const hitCount = (d?.hits || []).filter((h) => h.met && h.delta > 0).length;
-    return hitCount >= 4 ? "主要量规项已覆盖" : "部分量规项待加强";
+    return hitCount >= 4 ? "主要要点已覆盖" : "还有要点待补充";
   }
   return missed
-    .slice(0, 2)
-    .map((m) => m.label.replace(/量规.*/, "").slice(0, 28))
+    .slice(0, 1)
+    .map((m) => humanizeIssue(m.label).slice(0, 36))
     .join("；");
 }
 
-function scoreExplainSummaryHtml(detail) {
+function scoreExplainSummaryHtml(detail, trainee) {
   const rows = [
-    ["学习规划", detail.learning],
-    ["赛考规划", detail.competition],
-    ["答疑能力", detail.qna],
+    ["学习规划", detail.learning, trainee?.learning],
+    ["赛考规划", detail.competition, trainee?.competition],
+    ["答疑能力", detail.qna, trainee?.qna],
   ];
   const body = rows
     .map(
-      ([label, d]) =>
-        `<tr><td>${escapeHtml(label)}</td><td class="num">${Number(d.score).toFixed(2)}</td><td class="hint">${escapeHtml(dimOneLiner(d))}</td></tr>`
+      ([label, d, td]) =>
+        `<tr><td>${escapeHtml(label)}</td><td class="num">${Number(d.score).toFixed(2)}</td><td class="hint">${escapeHtml(dimOneLiner(d, td))}</td></tr>`
     )
     .join("");
   return `
@@ -378,17 +383,21 @@ function barRow(label, value, max) {
     </div>`;
 }
 
-function fb(title, tier, score, d) {
-  const strengths = (d.strengths || []).map((s) => `<li>${escapeHtml(s)}</li>`).join("") || "<li>（无明显亮点信号）</li>";
-  const issues = (d.issues || []).map((s) => `<li>${formatInlineBold(escapeHtml(s))}</li>`).join("") || "<li>（未触发额外扣分说明）</li>";
+function fb(title, tier, score, td) {
+  const strengths =
+    (td.strengths || []).map((s) => `<li>${escapeHtml(s)}</li>`).join("") ||
+    "<li class=\"muted\">（暂无突出亮点，按下方建议补充即可）</li>";
+  const priority =
+    (td.priorityIssues || []).map((s) => `<li>${escapeHtml(s)}</li>`).join("") ||
+    "<li class=\"muted\">（本项暂无额外修改建议）</li>";
   return `
     <div class="fb-card">
       <h3>${escapeHtml(title)} · ${score.toFixed(2)} 分</h3>
       <span class="tier">${escapeHtml(tier)}</span>
-      <p class="muted" style="margin:8px 0 6px;font-weight:600;">亮点信号</p>
+      <p class="muted" style="margin:8px 0 6px;font-weight:600;">做得好的地方</p>
       <ul>${strengths}</ul>
-      <p class="muted" style="margin:12px 0 6px;font-weight:600;">修改建议 / 风险提示</p>
-      <ul>${issues}</ul>
+      <p class="muted" style="margin:12px 0 6px;font-weight:600;">建议先改（最多 3 条）</p>
+      <ul>${priority}</ul>
     </div>`;
 }
 
@@ -397,25 +406,20 @@ function formatInlineBold(escaped) {
   return escaped.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
 }
 
-function courseKnowledgeCardHtml(ck) {
+function courseKnowledgeCardHtml(ck, traineeFindings) {
   const d = ck.deductions || { learning: 0, competition: 0, qna: 0 };
-  const head = `学习规划 -${d.learning.toFixed(2)} · 赛考规划 -${d.competition.toFixed(2)} · 答疑 -${d.qna.toFixed(2)}（各维度累计封顶后再折算总分）`;
-  const items = (ck.findings || [])
-    .map((f) => {
-      const p = f.penalty || {};
-      const bits = [];
-      if (p.learning > 0) bits.push(`学习 -${p.learning.toFixed(2)}`);
-      if (p.competition > 0) bits.push(`赛考 -${p.competition.toFixed(2)}`);
-      if (p.qna > 0) bits.push(`答疑 -${p.qna.toFixed(2)}`);
-      const meta = bits.join(" · ");
-      const body = formatInlineBold(escapeHtml(f.message || ""));
-      return `<li><span class="course-kb-dim">${escapeHtml(meta)}</span><span class="course-kb-msg">${body}</span></li>`;
-    })
+  const headParts = [];
+  if (d.learning > 0) headParts.push(`学习规划扣 ${d.learning.toFixed(2)} 分`);
+  if (d.competition > 0) headParts.push(`赛考规划扣 ${d.competition.toFixed(2)} 分`);
+  if (d.qna > 0) headParts.push(`答疑扣 ${d.qna.toFixed(2)} 分`);
+  const head = headParts.join(" · ") || "已计入总分";
+  const items = (traineeFindings || [])
+    .map((f) => `<li class="course-kb-msg">${escapeHtml(f.text || "")}</li>`)
     .join("");
   return `
     <div class="fb-card fb-card--course-kb" style="grid-column:1/-1;">
-      <h3>课程知识一致性</h3>
-      <p class="muted" style="margin:0 0 10px;">以下表述与<strong>教研内置</strong>的课程体系 / 赛考时间线口径不一致，已分项扣分并计入总分。<strong>仅逐字稿检出</strong>的问题不扣答疑分；<strong>仅答疑检出</strong>的问题对学习规划扣罚减轻。</p>
+      <h3>课程表述需修改</h3>
+      <p class="muted" style="margin:0 0 10px;">以下内容与公司课程/赛考标准不一致，请对照培训材料修改。出现在逐字稿的问题主要扣学习与赛考；仅出现在答疑的问题主要扣答疑。</p>
       <p class="course-kb-head">${escapeHtml(head)}</p>
       <ul class="course-kb-list">${items}</ul>
     </div>`;
@@ -731,6 +735,15 @@ function downloadBlob(filename, text, mime) {
 function adminFeedbackDetailSectionHtml(r) {
   const fd = r.feedbackDetail;
   const sc = r.scores || {};
+  const trainee = ensureTraineeFeedback({
+    detail: fd,
+    learning: sc.learning,
+    competition: sc.competition,
+    qna: sc.qna,
+    total: sc.total,
+    courseKnowledge: r.scoreResult?.courseKnowledge,
+    trainee: r.scoreResult?.trainee,
+  });
   if (!fd || !fd.learning) {
     return `
         <div class="detail-block">
@@ -742,33 +755,33 @@ function adminFeedbackDetailSectionHtml(r) {
         <div class="detail-block">
           <h4>智能分项点评（详细）</h4>
           <div class="admin-fb-grid">
-            ${renderAdminFeedbackDimension("学习规划", fd.learning, sc.learning)}
-            ${renderAdminFeedbackDimension("赛考规划", fd.competition, sc.competition)}
-            ${renderAdminFeedbackDimension("答疑能力", fd.qna, sc.qna)}
+            ${renderAdminFeedbackDimension("学习规划", trainee.learning, sc.learning)}
+            ${renderAdminFeedbackDimension("赛考规划", trainee.competition, sc.competition)}
+            ${renderAdminFeedbackDimension("答疑能力", trainee.qna, sc.qna)}
           </div>
         </div>`;
 }
 
-function renderAdminFeedbackDimension(title, d, scoreOverride) {
-  if (!d || typeof d !== "object") return "";
+function renderAdminFeedbackDimension(title, td, scoreOverride) {
+  if (!td || typeof td !== "object") return "";
   const num =
     scoreOverride != null && scoreOverride !== ""
       ? Number(scoreOverride)
-      : Number(d.score ?? 0);
+      : Number(td.score ?? 0);
   const scoreStr = Number.isFinite(num) ? num.toFixed(2) : "—";
-  const tier = escapeHtml(d.tier || "");
   const strengths =
-    (d.strengths || []).map((s) => `<li>${escapeHtml(s)}</li>`).join("") ||
+    (td.strengths || []).map((s) => `<li>${escapeHtml(s)}</li>`).join("") ||
     "<li class=\"muted\">（无）</li>";
-  const issues =
-    (d.issues || []).map((s) => `<li>${escapeHtml(s)}</li>`).join("") || "<li class=\"muted\">（无）</li>";
+  const priority =
+    (td.priorityIssues || []).map((s) => `<li>${escapeHtml(s)}</li>`).join("") ||
+    "<li class=\"muted\">（无）</li>";
   return `
             <div class="admin-fb-dim">
-              <h4 class="admin-fb-dim-title">${escapeHtml(title)} · ${scoreStr} 分 <span class="admin-fb-tier">${tier}</span></h4>
-              <p class="admin-fb-sub">亮点信号</p>
+              <h4 class="admin-fb-dim-title">${escapeHtml(title)} · ${scoreStr} 分</h4>
+              <p class="admin-fb-sub">做得好的地方</p>
               <ul class="admin-fb-ul">${strengths}</ul>
-              <p class="admin-fb-sub">修改建议 / 风险提示</p>
-              <ul class="admin-fb-ul">${issues}</ul>
+              <p class="admin-fb-sub">建议先改</p>
+              <ul class="admin-fb-ul">${priority}</ul>
             </div>`;
 }
 

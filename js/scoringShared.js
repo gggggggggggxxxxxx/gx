@@ -18,6 +18,81 @@ export function tierLabel(score) {
   return "卓越";
 }
 
+/** 下拉中的泛化占位，不做简称匹配 */
+const GENERIC_REGION = /^(?:其他市\/区|其他区)$/u;
+
+/** 省级后缀（长串优先） */
+const PROVINCE_SUFFIXES = [
+  "壮族自治区",
+  "维吾尔自治区",
+  "回族自治区",
+  "自治区",
+  "特别行政区",
+  "省",
+];
+
+/** 地级 / 区县等后缀（长串优先；「新区」先于「区」） */
+const LOCAL_SUFFIXES = ["市", "地区", "盟", "州", "新区", "区"];
+
+/**
+ * 生成可用于 includes 匹配的地名别名（完整名 + 口语简称）
+ * @param {string} region
+ * @returns {string[]}
+ */
+export function regionAliases(region) {
+  const r = String(region || "").trim();
+  if (!r || GENERIC_REGION.test(r)) return [];
+
+  /** @type {string[]} */
+  const out = [r];
+
+  let base = r;
+  for (const suf of PROVINCE_SUFFIXES) {
+    if (base.endsWith(suf)) {
+      base = base.slice(0, -suf.length);
+      break;
+    }
+  }
+  if (base !== r && base.length >= 2) out.push(base);
+
+  if (base === r) {
+    for (const suf of LOCAL_SUFFIXES) {
+      if (base.endsWith(suf)) {
+        const short = base.slice(0, -suf.length);
+        if (short.length >= 2) out.push(short);
+        break;
+      }
+    }
+  }
+
+  return [...new Set(out.filter((a) => a.length >= 2))];
+}
+
+/**
+ * 稿内是否出现与学员声明一致的省/市/区（如「青岛市」↔「青岛」、「海淀区」↔「海淀」）
+ * @param {string} text
+ * @param {string} region
+ */
+export function regionMentionedInText(text, region) {
+  const t = String(text || "");
+  const aliases = regionAliases(region);
+  if (!aliases.length) return false;
+  return aliases.some((alias) => t.includes(alias));
+}
+
+/**
+ * @param {string} script
+ * @param {{ province?: string; city?: string }} [student]
+ */
+export function scriptBindsStudentRegion(script, student) {
+  if (!student) return false;
+  const province = String(student.province || "").trim();
+  const city = String(student.city || "").trim();
+  if (province && regionMentionedInText(script, province)) return true;
+  if (city && regionMentionedInText(script, city)) return true;
+  return false;
+}
+
 /**
  * @param {{ score: number }} L
  * @param {{ score: number }} C
