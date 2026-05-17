@@ -136,26 +136,102 @@ function matchNearBidirectional(text, reA, reB, span = 180, opts = {}) {
   return walk(reA, reB) || walk(reB, reA);
 }
 
-/** 窗口内为 Python 赛考节奏（避免图形化「3 个月×等级」规则误伤「Python…三个月后 YCL 四级」等） */
+/** 窗口内为 Python 赛考节奏（图形化稿衔接段） */
 function windowIsPythonYclExam(chunk) {
   return /[Pp]ython/u.test(chunk) && /YCL|ycl/u.test(chunk);
+}
+
+/** 窗口内为图形化/Scratch 赛考节奏（Python 主线稿回顾图形化时跳过） */
+function windowIsScratchYclExam(chunk) {
+  return /(?:图形化|Scratch)/u.test(chunk) && /YCL|ycl/u.test(chunk);
 }
 
 function matchNearScratchYcl(text, reA, reB, span = 200) {
   return matchNearBidirectional(text, reA, reB, span, { rejectWindow: windowIsPythonYclExam });
 }
 
+function matchNearPythonYcl(text, reA, reB, span = 200) {
+  return matchNearBidirectional(text, reA, reB, span, { rejectWindow: windowIsScratchYclExam });
+}
+
+/** 分句：Python 升学衔接（含 YCL 或数月节奏） */
+function snippetIsPythonForwardSection(s) {
+  return /[Pp]ython/u.test(s) && (/YCL|ycl/u.test(s) || /(?:3|三|4|四)\s*个?月/u.test(s));
+}
+
+/** 分句：明确讲趣味/常规 C++ 班型课时（非「将来升 C++」类衔接） */
+function snippetIsCppProductContext(s) {
+  if (/将来|后续|可以升|规划路径|了解即可|先了解/u.test(s)) return false;
+  return /趣味.{0,10}C\+\+|C\+\+.{0,10}趣味|常规.{0,14}C\+\+|C\+\+.{0,14}常规|信奥科特班/u.test(s);
+}
+
+/** 窗口内为科特图形化一年路线图：3 月一级 + 8 月二级并存 */
+function windowIsKoteScratchYearRoadmap(chunk) {
+  return (
+    RE_MONTH_3.test(chunk) &&
+    RE_YCL_LEVEL_1.test(chunk) &&
+    /8\s*个?月|八\s*个月/u.test(chunk) &&
+    RE_YCL_LEVEL_2.test(chunk)
+  );
+}
+
+function snippetDeclaresKote(s) {
+  return /科特|科技特长生/u.test(s);
+}
+
+function snippetDeclaresThink(s) {
+  return /思维线|思维(?!科)/u.test(s);
+}
+
 /**
- * 学员在步骤 1 选择的线路 + 阶段：与规则上的 tracks/stages 一致时才跑该条校验（多线/多阶段则全开）。
- * @param {{ alwaysRun?: boolean; tracks?: string[]; stages?: string[] }} rule
- * @param {{ trackLine?: string; courseStage?: string }} [student]
+ * 句内无线路词、仅靠步骤 1 声明时：跳过 Python/C++ 衔接与纯对比句
+ * @param {string} s
+ * @param {object} [st]
+ * @param {'kote'|'think'} line
  */
+function declaredSnippetApplies(s, st, line) {
+  const declared =
+    line === "kote"
+      ? declaredKoteScratch(st) || declaredKotePython(st)
+      : declaredThinkScratch(st) || declaredThinkPython(st);
+  const inScript =
+    line === "kote"
+      ? koteScratchContext(s) || kotePythonContext(s)
+      : thinkScratchContext(s) || thinkPythonContext(s);
+  if (inScript) return true;
+  if (!declared) return false;
+  if (snippetIsPythonForwardSection(s) || snippetIsCppProductContext(s)) return false;
+  if (line === "kote" && snippetDeclaresThink(s) && !snippetDeclaresKote(s)) return false;
+  if (line === "think" && snippetDeclaresKote(s) && !snippetDeclaresThink(s)) return false;
+  return true;
+}
+
+/** 图形化阶段专用：声明科特·图形化时跳过 Python/C++ 衔接句 */
+function declaredKoteScratchSnippetOnly(s, st) {
+  if (/思维.{0,80}前\s*8\s*课时/u.test(s) && /科特.{0,80}前\s*10\s*课时/u.test(s)) return false;
+  if (koteScratchContext(s)) return true;
+  if (!declaredKoteScratch(st)) return false;
+  if (snippetIsPythonForwardSection(s) || snippetIsCppProductContext(s)) return false;
+  if (snippetDeclaresThink(s) && !snippetDeclaresKote(s)) return false;
+  return true;
+}
+
+function declaredThinkScratchSnippetOnly(s, st) {
+  if (thinkScratchContext(s)) return true;
+  if (!declaredThinkScratch(st)) return false;
+  if (snippetIsPythonForwardSection(s) || snippetIsCppProductContext(s)) return false;
+  if (snippetDeclaresKote(s) && !snippetDeclaresThink(s)) return false;
+  return true;
+}
+
+/** 步骤 1 线路+阶段：仅跑与主线一致的规则（旧存档「多线/多阶段」按科特·图形化过滤） */
 function ruleAppliesToStudentDeclaration(rule, student) {
   if (rule.alwaysRun) return true;
-  const trackLine = (student && student.trackLine) || "";
-  const courseStage = (student && student.courseStage) || "";
+  let trackLine = (student && student.trackLine) || "";
+  let courseStage = (student && student.courseStage) || "";
+  if (trackLine === "多线或未锁定") trackLine = "科特线";
+  if (courseStage === "多阶段或未锁定") courseStage = "图形化";
   if (!trackLine || !courseStage) return true;
-  if (trackLine === "多线或未锁定" || courseStage === "多阶段或未锁定") return true;
   const tracks = rule.tracks;
   const stages = rule.stages;
   if (!tracks || !stages || !tracks.length || !stages.length) return true;
@@ -291,9 +367,11 @@ const RULES = [
     message:
       "思维线图形化种子班总课时为 **48 课时**（非 60）。将思维线写成 60 课时易与 **科特线图形化 60 课时** 混淆，请对照内置口径或培训材料。",
     test: (t, st) =>
-      (thinkScratchContext(t) || declaredThinkScratch(st)) &&
-      /60\s*课时/u.test(t) &&
-      !koteNear(t, /60\s*课时/u),
+      snippetAny(t, (s) => {
+        if (!declaredThinkScratchSnippetOnly(s, st)) return false;
+        if (!/60\s*课时/u.test(s)) return false;
+        return !koteNear(t, /60\s*课时/u);
+      }),
     penalty: { learning: 0.55, competition: 0.25, qna: 0.35 },
   },
   {
@@ -303,9 +381,11 @@ const RULES = [
     message:
       "科特线图形化实验班总课时为 **60 课时**（非 48）。若指「软编 30」等分项，请避免让家长误解为整阶段仅 48 课时。",
     test: (t, st) =>
-      (koteScratchContext(t) || declaredKoteScratch(st)) &&
-      /48\s*课时/u.test(t) &&
-      !thinkNear(t, /48\s*课时/u),
+      snippetAny(t, (s) => {
+        if (!declaredKoteScratchSnippetOnly(s, st)) return false;
+        if (!/48\s*课时/u.test(s)) return false;
+        return !thinkNear(t, /48\s*课时/u);
+      }),
     penalty: { learning: 0.55, competition: 0.25, qna: 0.35 },
   },
   {
@@ -339,7 +419,7 @@ const RULES = [
       "思维线 **图形化** 全额退课时费节点为 **前 8 课时（第 9 课时解锁前）**，不宜写成前 10 / 第 11。",
     test: (t, st) =>
       snippetAny(t, (s) => {
-        if (!thinkScratchContext(s) && !declaredThinkScratch(st)) return false;
+        if (!declaredThinkScratchSnippetOnly(s, st)) return false;
         if (/不是.{0,10}前10|实际.{0,12}前8|应该.{0,10}前8|误区/u.test(s)) return false;
         return /前10\s*课时|第11/u.test(s) && /全额|全退|退费/u.test(s);
       }),
@@ -353,7 +433,7 @@ const RULES = [
       "科特线 **图形化** 全额退课时费节点为 **前 10 课时（第 11 课时解锁前）**，不宜写成前 8 / 第 9。",
     test: (t, st) =>
       snippetAny(t, (s) => {
-        if (!koteScratchContext(s) && !declaredKoteScratch(st)) return false;
+        if (!declaredKoteScratchSnippetOnly(s, st)) return false;
         return /前8\s*课时|第9\s*课|九\s*课\s*时\s*解锁/u.test(s) && /全额|全退|退费/u.test(s);
       }),
     penalty: { learning: 0.45, competition: 0.15, qna: 0.45 },
@@ -377,7 +457,8 @@ const RULES = [
     alwaysRun: true,
     message:
       "**趣味 C++** 信奥科特班总课时为 **60 课时**（含实操、硬件、赛考），不宜写成 56 课时（56 为常规 C++ 实操+直播结构口径）。",
-    test: (t) => /趣味.{0,8}C\+\+|C\+\+.{0,8}趣味/u.test(t) && /56\s*课时/u.test(t),
+    test: (t) =>
+      snippetAny(t, (s) => snippetIsCppProductContext(s) && /趣味/u.test(s) && /56\s*课时/u.test(s)),
     penalty: { learning: 0.5, competition: 0.2, qna: 0.3 },
   },
   {
@@ -387,6 +468,7 @@ const RULES = [
       "**常规 C++** 信奥科特班为 **56 课时**（48 实操 + 8 考前直播），不宜将整阶段写成 **60 课时**（与趣味 C++ 混淆）。",
     test: (t) =>
       snippetAny(t, (s) => {
+        if (!snippetIsCppProductContext(s)) return false;
         if (!/常规.{0,12}C\+\+|C\+\+.{0,12}常规/u.test(s)) return false;
         if (/趣味/u.test(s)) return false;
         return /60\s*课时/u.test(s);
@@ -434,7 +516,9 @@ const RULES = [
       "**科特·图形化** 首张节奏为 **约 3 个月 YCL 一级**，不宜写成 **3 个月** 却对接 **非一级** 的任意等级（含二级～九级、十级、ycl8级 等）。若步骤 1 已选科特线+图形化，逐字稿未写「科特」字样时仍按此口径比对。",
     test: (t, st) =>
       (koteScratchContext(t) || declaredKoteScratch(st)) &&
-      matchNearScratchYcl(t, RE_MONTH_3, RE_YCL_LEVEL_NOT_1, 200),
+      matchNearBidirectional(t, RE_MONTH_3, RE_YCL_LEVEL_NOT_1, 200, {
+        rejectWindow: (c) => windowIsPythonYclExam(c) || windowIsKoteScratchYearRoadmap(c),
+      }),
     penalty: { learning: 0.15, competition: 0.55, qna: 0.35 },
   },
   {
@@ -445,7 +529,7 @@ const RULES = [
       "**思维·Python** 半年里程碑为 **约 4 个月 YCL 四级**，不应把节奏写成 **3 个月** 却对接 **任意 YCL 等级**（含六级、七级、ycl10 等）。易与科特 Python「约 3 个月四级」混淆。若步骤 1 已选思维线+Python，逐字稿未写「思维」字样时仍按此口径比对。",
     test: (t, st) =>
       (thinkPythonContext(t) || declaredThinkPython(st)) &&
-      matchNearBidirectional(t, RE_MONTH_3, RE_YCL_ANY_LEVEL, 200),
+      matchNearPythonYcl(t, RE_MONTH_3, RE_YCL_ANY_LEVEL, 200),
     penalty: { learning: 0.15, competition: 0.55, qna: 0.35 },
   },
   {
@@ -456,7 +540,7 @@ const RULES = [
       "**思维·Python** 约 **4 个月** 应对齐 **YCL 四级**，不应在同一节奏里写成 **非四级** 的任意等级（含一级～三级、五级～十级、ycl6、YCL12级 等）。若步骤 1 已选思维线+Python，逐字稿未写「思维」字样时仍按此口径比对。",
     test: (t, st) =>
       (thinkPythonContext(t) || declaredThinkPython(st)) &&
-      matchNearBidirectional(t, RE_MONTH_4, RE_YCL_LEVEL_NOT_4, 200),
+      matchNearPythonYcl(t, RE_MONTH_4, RE_YCL_LEVEL_NOT_4, 200),
     penalty: { learning: 0.15, competition: 0.55, qna: 0.35 },
   },
   {
@@ -467,7 +551,7 @@ const RULES = [
       "**科特·Python** 首张节奏为 **约 3 个月 YCL 四级**，不宜写成 **4 个月** 却对接 **任意 YCL 等级**（含一至十级、ycl11 等）。若步骤 1 已选科特线+Python，逐字稿未写「科特」字样时仍按此口径比对。",
     test: (t, st) =>
       (kotePythonContext(t) || declaredKotePython(st)) &&
-      matchNearBidirectional(t, RE_MONTH_4, RE_YCL_ANY_LEVEL, 200),
+      matchNearPythonYcl(t, RE_MONTH_4, RE_YCL_ANY_LEVEL, 200),
     penalty: { learning: 0.15, competition: 0.55, qna: 0.35 },
   },
   {
@@ -478,7 +562,7 @@ const RULES = [
       "**科特·Python** 首张节奏为 **约 3 个月 YCL 四级**，不宜写成 **3 个月** 却对接 **非四级** 的任意等级（含一级～三级、五级～十级、ycl7级 等）。若步骤 1 已选科特线+Python，逐字稿未写「科特」字样时仍按此口径比对。",
     test: (t, st) =>
       (kotePythonContext(t) || declaredKotePython(st)) &&
-      matchNearBidirectional(t, RE_MONTH_3, RE_YCL_LEVEL_NOT_4, 200),
+      matchNearPythonYcl(t, RE_MONTH_3, RE_YCL_LEVEL_NOT_4, 200),
     penalty: { learning: 0.15, competition: 0.55, qna: 0.35 },
   },
   {
@@ -529,7 +613,7 @@ const RULES = [
       "**思维·图形化** 文档口径为半年约 **1 张** 国家级证书水平；写 **半年 2 张** 易与科特线混淆。",
     test: (t, st) =>
       snippetAny(t, (s) => {
-        if (!thinkScratchContext(s) && !declaredThinkScratch(st)) return false;
+        if (!declaredThinkScratchSnippetOnly(s, st)) return false;
         if (/科特/u.test(s)) return false;
         return /半\s*年.{0,30}2\s*张|半年[^。]{0,40}两\s*张/u.test(s) && /国家级|证书/u.test(s);
       }),
@@ -543,7 +627,7 @@ const RULES = [
       "**科特·图形化** 文档口径为半年约 **2 张** 国家级证书水平；若写 **半年仅 1 张** 则与科特节奏不符。",
     test: (t, st) =>
       snippetAny(t, (s) => {
-        if (!koteScratchContext(s) && !declaredKoteScratch(st)) return false;
+        if (!declaredKoteScratchSnippetOnly(s, st)) return false;
         return (
           /半\s*年[^。]{0,40}1\s*张|半年[^。]{0,40}一\s*张/u.test(s) && /国家级|证书/u.test(s)
         );

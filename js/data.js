@@ -15,11 +15,11 @@ export const GRADES = [
   "高三",
 ];
 
-/** 学员本次考核「产品线」— 用于课程口径审计：选「多线/未锁定」时仍按全文规则检测 */
-export const TRACK_LINES = ["思维线", "科特线", "多线或未锁定"];
+/** 学员本次考核主线（线路）— 图形化稿内可衔接 Python/C++，步骤 1 仍只选当前主线 */
+export const TRACK_LINES = ["思维线", "科特线"];
 
-/** 与 TRACK_LINES 搭配：阶段维度 */
-export const COURSE_STAGES = ["图形化", "Python", "多阶段或未锁定"];
+/** 与 TRACK_LINES 搭配：当前考核阶段 */
+export const COURSE_STAGES = ["图形化", "Python"];
 
 /**
  * 省份及下属「市区」示例数据（教学演示用，可扩展）

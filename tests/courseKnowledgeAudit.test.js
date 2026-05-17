@@ -139,4 +139,31 @@ describe("auditCourseKnowledge — 线路过滤", () => {
       "孩子跟着我学习三个月就会达到YCL一级的考级水平。在Python第一阶段的学习中，三个月后孩子就能达到YCL四级的考级水平。";
     assertExcludes(ids(script, "", koteScratch), "ycl-kote-scratch-3m-not-l1", "python 3m L4 not scratch");
   });
+
+  it("科特·Python：稿内图形化「三个月 YCL 一级」不误触 Python 3 月×非四级", () => {
+    const kotePy = { trackLine: "科特线", courseStage: "Python" };
+    const script =
+      "图形化阶段三个月考ycl一级。科特线Python三个月后达到YCL四级考级水平。";
+    assertExcludes(ids(script, "", kotePy), "ycl-kote-py-3m-not-l4", "scratch 3m L1 not python");
+  });
+
+  it("科特·图形化：衔接段提常规 C++ 60 课时（非班型介绍）不误报", () => {
+    const koteScratch = { trackLine: "科特线", courseStage: "图形化" };
+    const script = "后面可以升常规C++，将来有60课时的规划路径，家长先了解即可。";
+    assertExcludes(ids(script, "", koteScratch), "regular-cpp-60", "cpp forward mention");
+  });
+
+  it("科特·图形化：对比思维线前 8 课时可退不误触科特退费规则", () => {
+    const koteScratch = { trackLine: "科特线", courseStage: "图形化" };
+    const script = "思维线图形化是前8课时内可以全额退费，咱们科特线是前10课时。";
+    assertExcludes(ids(script, "", koteScratch), "refund-scratch-kote-p8", "think refund compare");
+  });
+
+  it("科特·图形化：3 月一级与 8 月二级路线图不误报", () => {
+    const koteScratch = { trackLine: "科特线", courseStage: "图形化" };
+    const script =
+      "三个月达到YCL一级，八个月可以冲YCL二级，这是科特图形化一年的赛考节奏。";
+    assertExcludes(ids(script, "", koteScratch), "ycl-kote-scratch-3m-not-l1", "3m L1 8m L2");
+    assertExcludes(ids(script, "", koteScratch), "ycl-kote-scratch-4m-l1", "no false 4m");
+  });
 });

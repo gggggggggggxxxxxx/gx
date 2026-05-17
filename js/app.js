@@ -55,8 +55,8 @@ function init() {
   fillSelect(els.studentProvince, PROVINCES);
   fillSelect(els.studentTrackLine, TRACK_LINES);
   fillSelect(els.studentCourseStage, COURSE_STAGES);
-  els.studentTrackLine.value = "多线或未锁定";
-  els.studentCourseStage.value = "多阶段或未锁定";
+  els.studentTrackLine.value = "科特线";
+  els.studentCourseStage.value = "图形化";
   refreshCitySelect();
 
   els.studentProvince.addEventListener("change", refreshCitySelect);
@@ -163,8 +163,8 @@ function validateInfo() {
   if (!t.name || !t.city) return "请填写考核老师的姓名与所在城市。";
   if (!s.name) return "请填写学员姓名。";
   if (!Number.isFinite(s.age) || s.age < 3 || s.age > 18) return "学员年龄需在 3–18 岁之间。";
-  if (!s.trackLine || !TRACK_LINES.includes(s.trackLine)) return "请选择学员本次考核主线对应的线路（思维线 / 科特线 / 多线或未锁定）。";
-  if (!s.courseStage || !COURSE_STAGES.includes(s.courseStage)) return "请选择学员本次考核主线对应的阶段（图形化 / Python / 多阶段或未锁定）。";
+  if (!s.trackLine || !TRACK_LINES.includes(s.trackLine)) return "请选择学员本次考核主线对应的线路（思维线 / 科特线）。";
+  if (!s.courseStage || !COURSE_STAGES.includes(s.courseStage)) return "请选择学员本次考核主线对应的阶段（图形化 / Python）。";
   return null;
 }
 
@@ -395,8 +395,8 @@ function resetAll() {
   els.studentGrade.selectedIndex = 0;
   els.studentProvince.selectedIndex = 0;
   refreshCitySelect();
-  els.studentTrackLine.value = "多线或未锁定";
-  els.studentCourseStage.value = "多阶段或未锁定";
+  els.studentTrackLine.value = "科特线";
+  els.studentCourseStage.value = "图形化";
   els.scriptText.value = "";
   updateCharCount();
   currentQuestions = [];
