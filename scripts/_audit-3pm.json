@@ -1,0 +1,63 @@
+{
+  "cutoffChina": "2026-05-17 15:00",
+  "cutoffUtc": "2026-05-17T07:00:00.000Z",
+  "scanned": 142,
+  "withCourseFindings": 2,
+  "clean": 140,
+  "records": [
+    {
+      "time": "2026-05-17 15:29:03",
+      "teacher": "测试 · 西安",
+      "student": "测试 · 科特线 · 图形化",
+      "total": 6.38,
+      "deductions": {
+        "learning": 0.15,
+        "competition": 0.55,
+        "qna": 0
+      },
+      "findings": [
+        {
+          "id": "ycl-kote-scratch-4m-l1",
+          "label": "科特图形化：4个月对接任意YCL（首张应为约3个月一级）",
+          "sources": [
+            "逐字稿"
+          ],
+          "penalty": {
+            "learning": 0.15,
+            "competition": 0.55,
+            "qna": 0
+          },
+          "snippet": "",
+          "message": "**科特·图形化** 首张节奏为 **约 3 个月 YCL 一级**，不宜写成 **4 个月** 却对接 **任意 YCL 等级**（含 ycl1级、YCL6级、七级、ycl12 等）。若步骤 1 已选科特线+图形化，逐字稿未写「科特」字样时仍按此口径比对。"
+        }
+      ]
+    },
+    {
+      "time": "2026-05-17 15:44:57",
+      "teacher": "石鑫 · 西安市",
+      "student": "张丰源 · 科特线 · 图形化",
+      "total": 7.62,
+      "deductions": {
+        "learning": 0.15,
+        "competition": 0.55,
+        "qna": 0
+      },
+      "findings": [
+        {
+          "id": "ycl-kote-scratch-4m-l1",
+          "label": "科特图形化：4个月对接任意YCL（首张应为约3个月一级）",
+          "sources": [
+            "逐字稿"
+          ],
+          "penalty": {
+            "learning": 0.15,
+            "competition": 0.55,
+            "qna": 0
+          },
+          "snippet": "",
+          "message": "**科特·图形化** 首张节奏为 **约 3 个月 YCL 一级**，不宜写成 **4 个月** 却对接 **任意 YCL 等级**（含 ycl1级、YCL6级、七级、ycl12 等）。若步骤 1 已选科特线+图形化，逐字稿未写「科特」字样时仍按此口径比对。"
+        }
+      ]
+    }
+  ]
+}

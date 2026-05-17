@@ -59,6 +59,11 @@ describe("auditCourseKnowledge — YCL 月份×等级", () => {
     assertExcludes(ids(script, "", koteScratch), "ycl-kote-scratch-3m-not-l1", "kote 3m+L1 OK");
   });
 
+  it("科特·图形化：3个月+YCL的一级（含「的」）不误报", () => {
+    const script = "学习3个月可以参加YCL的一级考试，图形化2阶段可以参加YCL2级考试。";
+    assertExcludes(ids(script, "", koteScratch), "ycl-kote-scratch-3m-not-l1", "YCL 的一级");
+  });
+
   it("思维·Python：4个月+六级等非四级", () => {
     const script = "思维线Python四个月冲YCL六级。";
     assertIncludes(ids(script, "", thinkPy), "ycl-think-py-4m-l5", "think py 4m not L4");
@@ -140,6 +145,13 @@ describe("auditCourseKnowledge — 线路过滤", () => {
     assertExcludes(ids(script, "", koteScratch), "ycl-kote-scratch-3m-not-l1", "python 3m L4 not scratch");
   });
 
+  it("科特·图形化：Python 段「三个月左右…YCL4级」不误触（闫炬稿衔接表述）", () => {
+    const koteScratch = { trackLine: "科特线", courseStage: "图形化" };
+    const script =
+      "学习 Python 期间，我们依旧同步安排对应赛考，学到三个月左右，27年的9月份，报考 YCL4级，学完6个单元。";
+    assertExcludes(ids(script, "", koteScratch), "ycl-kote-scratch-3m-not-l1", "python 3m L4 around");
+  });
+
   it("科特·Python：稿内图形化「三个月 YCL 一级」不误触 Python 3 月×非四级", () => {
     const kotePy = { trackLine: "科特线", courseStage: "Python" };
     const script =
@@ -165,5 +177,83 @@ describe("auditCourseKnowledge — 线路过滤", () => {
       "三个月达到YCL一级，八个月可以冲YCL二级，这是科特图形化一年的赛考节奏。";
     assertExcludes(ids(script, "", koteScratch), "ycl-kote-scratch-3m-not-l1", "3m L1 8m L2");
     assertExcludes(ids(script, "", koteScratch), "ycl-kote-scratch-4m-l1", "no false 4m");
+  });
+
+  it("科特·图形化：先一级再三个月冲二级（分句递进）不误报", () => {
+    const koteScratch = { trackLine: "科特线", courseStage: "图形化" };
+    const script =
+      "学习三个月左右参加YCL等级考试一级。再学习三个月左右考取YCL2级证书，随后参加图灵杯。";
+    assertExcludes(ids(script, "", koteScratch), "ycl-kote-scratch-3m-not-l1", "follow-on 3m L2");
+  });
+
+  it("科特·图形化：首张三个月直写二级仍检出", () => {
+    const koteScratch = { trackLine: "科特线", courseStage: "图形化" };
+    const script = "学习三个月左右参加YCL二级等级考试。";
+    assertIncludes(ids(script, "", koteScratch), "ycl-kote-scratch-3m-not-l1", "first 3m L2");
+  });
+
+  it("科特·图形化：明年4月份（日历月）不误触四个月 YCL 规则", () => {
+    const koteScratch = { trackLine: "科特线", courseStage: "图形化" };
+    const script =
+      "三个月考YCL一级，明年4月份三年级上册学完图形化第二阶段。像咱参加的等级考试YCL很有含金量。";
+    assertExcludes(ids(script, "", koteScratch), "ycl-kote-scratch-4m-l1", "calendar 4月 not duration");
+  });
+
+  it("科特·图形化：第三、四个月阶段序号不误触四个月 YCL", () => {
+    const koteScratch = { trackLine: "科特线", courseStage: "图形化" };
+    const script = "第二个月学角色属性；第三，四个月就可以独立创作小动画，第三个月左右参加YCL一级。";
+    assertExcludes(ids(script, "", koteScratch), "ycl-kote-scratch-4m-l1", "ordinal 第三四个月");
+  });
+
+  it("科特·图形化：第3或第4个月+一级不误触", () => {
+    const koteScratch = { trackLine: "科特线", courseStage: "图形化" };
+    const script = "学到第3或者第4个月的时候鼓励去参加YCL一级的考试。";
+    assertExcludes(ids(script, "", koteScratch), "ycl-kote-scratch-4m-l1", "flex 3 or 4 month L1");
+  });
+
+  it("科特·图形化：同样的三个月冲二级（递进）不误触", () => {
+    const koteScratch = { trackLine: "科特线", courseStage: "图形化" };
+    const script =
+      "三个月考YCL一级。第二阶段我们还是同样的三个月的时间可以去参加咱们YCL二级的水平。";
+    assertExcludes(ids(script, "", koteScratch), "ycl-kote-scratch-3m-not-l1", "同样的 3m L2");
+  });
+
+  it("科特·图形化：答疑仅 Python 3月四级路线图不误触", () => {
+    const koteScratch = { trackLine: "科特线", courseStage: "图形化" };
+    const answers =
+      "学习一年可以具备考4张国家级证书，大概3个月的时间就可以尝试去考YCL四级，学到6个月参加图灵杯。再用1年将python学完就可以进入C++。";
+    assertExcludes(ids("", answers, koteScratch), "ycl-kote-scratch-3m-not-l1", "python-only answer");
+  });
+
+  it("科特·图形化：答疑先3月一级再3月四级（Python模板）不误触", () => {
+    const koteScratch = { trackLine: "科特线", courseStage: "图形化" };
+    const answers =
+      "图形化3个月左右考YCL1级。学习一年可以具备考4张国家级证书，大概3个月的时间就可以尝试去考YCL四级，学到6个月参加图灵杯。";
+    assertExcludes(ids("", answers, koteScratch), "ycl-kote-scratch-3m-not-l1", "dual track answer");
+  });
+
+  it("科特·图形化：稿内 PY学 + 3月四级不误触", () => {
+    const koteScratch = { trackLine: "科特线", courseStage: "图形化" };
+    const script =
+      "三个月考YCL一级。PY学习一年可以具备考4张国家级证书，大概3个月的时间就可以尝试去考YCL四级。";
+    assertExcludes(ids(script, "", koteScratch), "ycl-kote-scratch-3m-not-l1", "PY 3m L4");
+  });
+});
+
+describe("auditCourseKnowledge — 国家级证书张数（半年误报）", () => {
+  it("半年两张+一年四张不误报半年夸大", () => {
+    const script =
+      "半年具备两张国家级证书的水平，三个月参加ycl考级。两个阶段一年具备4张国家级证书水平。";
+    assertExcludes(ids(script, "", null), "cert-halfyear-national-over2", "half 2 year 4");
+  });
+
+  it("半年的课程结束不误触半年张数", () => {
+    const script = "半年的课程结束之后进入二阶段算法。学习一年可以具备考4张国家级证书。";
+    assertExcludes(ids(script, "", null), "cert-halfyear-national-over2", "half year course");
+  });
+
+  it("学半年具备考4张仍检出", () => {
+    const script = "学半年就能具备考4张国家级证书的水平。";
+    assertIncludes(ids(script, "", null), "cert-halfyear-national-over2", "true half year 4");
   });
 });

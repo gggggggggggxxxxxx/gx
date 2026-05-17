@@ -136,9 +136,9 @@ function matchNearBidirectional(text, reA, reB, span = 180, opts = {}) {
   return walk(reA, reB) || walk(reB, reA);
 }
 
-/** 窗口内为 Python 赛考节奏（图形化稿衔接段） */
+/** 窗口内为 Python 赛考节奏（图形化稿衔接段；含 PYthon / PY学 等模板写法） */
 function windowIsPythonYclExam(chunk) {
-  return /[Pp]ython/u.test(chunk) && /YCL|ycl/u.test(chunk);
+  return /(?:[Pp]ython|PYthon|PY\s*学)/u.test(chunk) && /YCL|ycl/u.test(chunk);
 }
 
 /** 窗口内为图形化/Scratch 赛考节奏（Python 主线稿回顾图形化时跳过） */
@@ -173,6 +173,128 @@ function windowIsKoteScratchYearRoadmap(chunk) {
     /8\s*个?月|八\s*个月/u.test(chunk) &&
     RE_YCL_LEVEL_2.test(chunk)
   );
+}
+
+/** 窗口内为一级之后的递进节奏：再/又/同样…约三个月冲 YCL 二级（首张三月一级可在前段已述） */
+function windowIsKoteScratchFollowOnL2(chunk) {
+  if (
+    !/(?:再|又|之后|然后|接着|随后|进一步|第二阶段|第二次|下一次|同样的|第二个阶段|二阶段|第二阶段)/u.test(
+      chunk
+    )
+  )
+    return false;
+  if (!RE_MONTH_3.test(chunk)) return false;
+  return RE_YCL_LEVEL_2.test(chunk) || /YCL\s*2|ycl\s*2|YCL2/u.test(chunk);
+}
+
+/** 「第3、四个月 / 第三，四个月」等阶段序号，不是「时长四个月」 */
+function windowIsOrdinalMonthSpan(chunk) {
+  return /第\s*[一二三四1-4１-４]\s*[,，、]?\s*(?:或者|或|和|至|到)?\s*第?\s*[三四4４]\s*个?\s*月|第\s*[三四4４]\s*[,，、]\s*四\s*个\s*月/u.test(
+    chunk
+  );
+}
+
+/** 第3或第4个月 + YCL 一级（允许弹性排期，不按「4个月+任意等级」误扣） */
+function windowIsFlexibleMonth3or4WithLevel1(chunk) {
+  return (
+    /第\s*[三四3-4]\s*(?:或者|或)\s*第?\s*[三四4]\s*个?\s*月/u.test(chunk) &&
+    RE_YCL_LEVEL_1.test(chunk)
+  );
+}
+
+/**
+ * 全文：该「三个月」锚点前已写过 3月+一级，且当前窗口为 3月+四级/五级 → Python 路线图（常见于答疑模板）
+ * @param {string} fullText
+ * @param {number} monthAt
+ */
+function windowIsPythonMilestoneAfterScratchL1(fullText, monthAt) {
+  const after = fullText.slice(monthAt, Math.min(fullText.length, monthAt + 140));
+  if (!RE_MONTH_3.test(after)) return false;
+  if (!RE_YCL_LEVEL_4.test(after) && !RE_YCL_LEVEL_5.test(after)) return false;
+  const before = fullText.slice(Math.max(0, monthAt - 900), monthAt);
+  return RE_MONTH_3.test(before) && RE_YCL_LEVEL_1.test(before);
+}
+
+/** 全文为 Python 路线图（含 3 月四级），且前文未出现「3 月+一级」首张表述（常见于仅答 Python 的答疑） */
+function windowIsPythonOnlyRoadmapText(fullText, monthAt) {
+  const after = fullText.slice(monthAt, Math.min(fullText.length, monthAt + 120));
+  if (!RE_MONTH_3.test(after) || !RE_YCL_LEVEL_4.test(after)) return false;
+  if (!/(?:[Pp]ython|PYthon|python)/u.test(fullText)) return false;
+  const before = fullText.slice(0, monthAt);
+  const g = new RegExp(RE_MONTH_3.source, RE_MONTH_3.flags.replace(/y/g, "") + "g");
+  let bm;
+  while ((bm = g.exec(before)) !== null) {
+    const c = before.slice(bm.index, Math.min(before.length, bm.index + 120));
+    if (RE_YCL_LEVEL_1.test(c)) return false;
+  }
+  return true;
+}
+
+/** 三个月锚点附近最近的 YCL 等级为一级 → 不误报「3月×非一级」 */
+function windowNearestYclIsLevel1(chunk, monthOffsetInChunk) {
+  /** @type {{ pos: number; level: number }[]} */
+  const hits = [];
+  const levelPatterns = [
+    [RE_YCL_LEVEL_1, 1],
+    [RE_YCL_LEVEL_2, 2],
+    [RE_YCL_LEVEL_3, 3],
+    [RE_YCL_LEVEL_4, 4],
+    [RE_YCL_LEVEL_5, 5],
+    [RE_YCL_LEVEL_6, 6],
+    [RE_YCL_LEVEL_7, 7],
+    [RE_YCL_LEVEL_8, 8],
+    [RE_YCL_LEVEL_9, 9],
+    [RE_YCL_LEVEL_10_PLUS, 10],
+  ];
+  for (const [re, level] of levelPatterns) {
+    const g = new RegExp(re.source, re.flags.replace(/y/g, "") + "g");
+    let m;
+    while ((m = g.exec(chunk)) !== null) {
+      hits.push({ pos: m.index, level });
+    }
+  }
+  if (!hits.length) return false;
+  const nearest = hits.reduce((a, b) =>
+    Math.abs(a.pos - monthOffsetInChunk) <= Math.abs(b.pos - monthOffsetInChunk) ? a : b
+  );
+  return nearest.level === 1;
+}
+
+/**
+ * 科特·图形化：3 个月应对齐一级；仅当窗口内「三个月」与「非一级」绑定且未被豁免时命中
+ */
+function matchKoteScratchThreeMonthNotLevel1(text, span = 200) {
+  const t = normalizeAuditText(text);
+  const g = new RegExp(RE_MONTH_3.source, RE_MONTH_3.flags.replace(/y/g, "") + "g");
+  let m;
+  while ((m = g.exec(t)) !== null) {
+    const lo = Math.max(0, m.index - span);
+    const hi = Math.min(t.length, m.index + m[0].length + span);
+    const chunk = t.slice(lo, hi);
+    const monthInChunk = m.index - lo;
+    if (windowIsPythonYclExam(chunk)) continue;
+    if (windowIsKoteScratchYearRoadmap(chunk)) continue;
+    if (windowIsKoteScratchFollowOnL2(chunk)) continue;
+    if (windowIsPythonMilestoneAfterScratchL1(t, m.index)) continue;
+    if (windowIsPythonOnlyRoadmapText(t, m.index)) continue;
+    if (windowNearestYclIsLevel1(chunk, monthInChunk)) continue;
+    if (new RegExp(RE_YCL_LEVEL_NOT_1.source, RE_YCL_LEVEL_NOT_1.flags.replace(/y/g, "")).test(chunk))
+      return true;
+  }
+  return false;
+}
+
+/**
+ * 科特·图形化：4 个月 + YCL；排除阶段序号、日历「4月份」等
+ */
+function matchKoteScratchFourMonthAnyYcl(text, span = 200) {
+  const t = normalizeAuditText(text);
+  return matchNearBidirectional(t, RE_MONTH_4, RE_YCL_ANY_LEVEL, span, {
+    rejectWindow: (chunk) =>
+      windowIsPythonYclExam(chunk) ||
+      windowIsOrdinalMonthSpan(chunk) ||
+      windowIsFlexibleMonth3or4WithLevel1(chunk),
+  });
 }
 
 function snippetDeclaresKote(s) {
@@ -255,27 +377,60 @@ function declaredKotePython(st) {
 /**
  * YCL 等级常见写法（含 ycl1级、YCL3级、六级～九级、十级/两位阿拉伯数字如 ycl12；须带 YCL/ycl 或 ycl 连写数字，避免误伤「3 个月」等无关表述）。
  */
+/** YCL 与等级数字之间允许「的」（如 YCL 的一级） */
+const RE_YCL_LV_GAP = String.raw`\s*的?\s*`;
+
 const RE_YCL_LEVEL_1 =
-  /(?:YCL|ycl)\s*(?:[一1１]\s*级|1\s*级)|(?:YCL|ycl)一级|ycl\s*1\s*级|ycl1(?:\s*级)?/iu;
+  new RegExp(
+    `(?:YCL|ycl)${RE_YCL_LV_GAP}(?:[一1１]\\s*级|1\\s*级)|(?:YCL|ycl)一级|ycl\\s*1\\s*级|ycl1(?:\\s*级)?`,
+    "iu"
+  );
 const RE_YCL_LEVEL_2 =
-  /(?:YCL|ycl)\s*(?:[二2２]\s*级|2\s*级)|(?:YCL|ycl)二级|ycl\s*2\s*级|ycl2(?:\s*级)?/iu;
+  new RegExp(
+    `(?:YCL|ycl)${RE_YCL_LV_GAP}(?:[二2２]\\s*级|2\\s*级)|(?:YCL|ycl)二级|ycl\\s*2\\s*级|ycl2(?:\\s*级)?`,
+    "iu"
+  );
 const RE_YCL_LEVEL_3 =
-  /(?:YCL|ycl)\s*(?:[三3３]\s*级|3\s*级)|(?:YCL|ycl)三级|ycl\s*3\s*级|ycl3(?:\s*级)?/iu;
+  new RegExp(
+    `(?:YCL|ycl)${RE_YCL_LV_GAP}(?:[三3３]\\s*级|3\\s*级)|(?:YCL|ycl)三级|ycl\\s*3\\s*级|ycl3(?:\\s*级)?`,
+    "iu"
+  );
 const RE_YCL_LEVEL_4 =
-  /(?:YCL|ycl)\s*(?:[四4４]\s*级|4\s*级)|(?:YCL|ycl)四级|ycl\s*4\s*级|ycl4(?:\s*级)?/iu;
+  new RegExp(
+    `(?:YCL|ycl)${RE_YCL_LV_GAP}(?:[四4４]\\s*级|4\\s*级)|(?:YCL|ycl)四级|ycl\\s*4\\s*级|ycl4(?:\\s*级)?`,
+    "iu"
+  );
 const RE_YCL_LEVEL_5 =
-  /(?:YCL|ycl)\s*(?:[五5５]\s*级|5\s*级)|(?:YCL|ycl)五级|ycl\s*5\s*级|ycl5(?:\s*级)?/iu;
+  new RegExp(
+    `(?:YCL|ycl)${RE_YCL_LV_GAP}(?:[五5５]\\s*级|5\\s*级)|(?:YCL|ycl)五级|ycl\\s*5\\s*级|ycl5(?:\\s*级)?`,
+    "iu"
+  );
 const RE_YCL_LEVEL_6 =
-  /(?:YCL|ycl)\s*(?:[六6６]\s*级|6\s*级)|(?:YCL|ycl)六级|ycl\s*6\s*级|ycl6(?:\s*级)?/iu;
+  new RegExp(
+    `(?:YCL|ycl)${RE_YCL_LV_GAP}(?:[六6６]\\s*级|6\\s*级)|(?:YCL|ycl)六级|ycl\\s*6\\s*级|ycl6(?:\\s*级)?`,
+    "iu"
+  );
 const RE_YCL_LEVEL_7 =
-  /(?:YCL|ycl)\s*(?:[七7７]\s*级|7\s*级)|(?:YCL|ycl)七级|ycl\s*7\s*级|ycl7(?:\s*级)?/iu;
+  new RegExp(
+    `(?:YCL|ycl)${RE_YCL_LV_GAP}(?:[七7７]\\s*级|7\\s*级)|(?:YCL|ycl)七级|ycl\\s*7\\s*级|ycl7(?:\\s*级)?`,
+    "iu"
+  );
 const RE_YCL_LEVEL_8 =
-  /(?:YCL|ycl)\s*(?:[八8８]\s*级|8\s*级)|(?:YCL|ycl)八级|ycl\s*8\s*级|ycl8(?:\s*级)?/iu;
+  new RegExp(
+    `(?:YCL|ycl)${RE_YCL_LV_GAP}(?:[八8８]\\s*级|8\\s*级)|(?:YCL|ycl)八级|ycl\\s*8\\s*级|ycl8(?:\\s*级)?`,
+    "iu"
+  );
 const RE_YCL_LEVEL_9 =
-  /(?:YCL|ycl)\s*(?:[九9９]\s*级|9\s*级)|(?:YCL|ycl)九级|ycl\s*9\s*级|ycl9(?:\s*级)?/iu;
+  new RegExp(
+    `(?:YCL|ycl)${RE_YCL_LV_GAP}(?:[九9９]\\s*级|9\\s*级)|(?:YCL|ycl)九级|ycl\\s*9\\s*级|ycl9(?:\\s*级)?`,
+    "iu"
+  );
 /** 十级及以上中文，或两位及以上阿拉伯（如 YCL10级、ycl12，易为口误/虚构） */
 const RE_YCL_LEVEL_10_PLUS =
-  /(?:YCL|ycl)\s*(?:十\s*级|10\s*级)|(?:YCL|ycl)十级|ycl\s*10\s*级|ycl10(?:\s*级)?|(?:YCL|ycl)\s*(?:1[1-9]|[2-9]\d|\d{3,})\s*级|ycl(?:1[1-9]|[2-9]\d|\d{3,})(?:\s*级)?/iu;
+  new RegExp(
+    `(?:YCL|ycl)${RE_YCL_LV_GAP}(?:十\\s*级|10\\s*级)|(?:YCL|ycl)十级|ycl\\s*10\\s*级|ycl10(?:\\s*级)?|(?:YCL|ycl)${RE_YCL_LV_GAP}(?:1[1-9]|[2-9]\\d|\\d{3,})\\s*级|ycl(?:1[1-9]|[2-9]\\d|\\d{3,})(?:\\s*级)?`,
+    "iu"
+  );
 
 const RE_YCL_LEVELS_1_TO_9 = [
   RE_YCL_LEVEL_1,
@@ -309,9 +464,9 @@ const RE_YCL_LEVEL_NOT_4 = new RegExp(
   "iu"
 );
 
-/** 注意：`月左右?` 会错误解析成「月+左+右?」，无法匹配「3个月」「4个月」；须写作 `月(?:左右)?`。 */
-const RE_MONTH_3 = /3\s*个?月(?:左右)?|约\s*3\s*个?月|三个月(?:左右)?/;
-const RE_MONTH_4 = /4\s*个?月(?:左右)?|约\s*4\s*个?月|四个月(?:左右)?/;
+/** 注意：`月左右?` 会错误解析成「月+左+右?」；`个` 不可省略，否则「明年4月份」等日历月会误当「四个月」。 */
+const RE_MONTH_3 = /3\s*个\s*月(?:左右)?|约\s*3\s*个\s*月|三个月(?:左右)?/;
+const RE_MONTH_4 = /4\s*个\s*月(?:左右)?|约\s*4\s*个\s*月|四个月(?:左右)?/;
 
 /** 与「张」国家级赛考承诺连用的时长词 */
 const RE_ANNUAL = /(?:学\s*)?一\s*年|一\s*年\s*左右|满\s*一\s*年|整\s*一\s*年|1\s*年/u;
@@ -333,27 +488,52 @@ function certOverclaimNegation(t) {
   );
 }
 
+/** 「半年」锚点为课程时长/已合规 2 张等，非「半年≥3张证」夸大 */
+function certHalfYearAnchorBenign(chunkFromHalf) {
+  if (/半年\s*的\s*课程|半年课程|半年的课程/u.test(chunkFromHalf.slice(0, 16))) return true;
+  if (/半年[\s\S]{0,72}(?:两|2)\s*[张張][\s\S]{0,36}(?:国家级|证书)/u.test(chunkFromHalf)) return true;
+  return false;
+}
+
 /**
- * 长稿中「半年」多次出现（如「半年前」）时，matchNear 可能先锚到无关「半年」导致漏检。
- * 对每个「半年/半 年」锚点向前跳过「…前半年」中的前字，再向右取片段校验张数+国家级。
+ * 半年内声称 3 张及以上国家级证书；缩短窗口，避免与后文「一年四张」拼窗误报。
  */
 function certHalfYearThreePlusNationalScan(t) {
-  const reAnchor = /半年|半\s*年/g;
+  const reAnchor = /(?:学\s*)?半年|半\s*年/g;
   let m;
   while ((m = reAnchor.exec(t)) !== null) {
     const at = m.index;
-    /** 跳过「半年前」等：「半年」后紧跟「前」 */
     if (at + 2 < t.length && t[at + 2] === "前") continue;
-    const chunk = t.slice(at, Math.min(t.length, at + 480));
+    const chunk = t.slice(at, Math.min(t.length, at + 200));
+    if (certHalfYearAnchorBenign(chunk)) continue;
+    const fourM = chunk.match(/[四4]\s*[张張]/);
+    if (fourM) {
+      const fourAt = chunk.indexOf(fourM[0]);
+      if (/一\s*年|整\s*一\s*年|年度|整个年/u.test(chunk.slice(0, fourAt))) continue;
+    }
     if (RE_CERT_SHEETS_3_PLUS_IN_HALF_YEAR.test(chunk) && RE_NATIONAL_CERT_MENTION.test(chunk)) return true;
   }
   const reSheet = new RegExp(RE_CERT_SHEETS_3_PLUS_IN_HALF_YEAR.source, "gu");
   while ((m = reSheet.exec(t)) !== null) {
     const at = m.index;
-    const lo = Math.max(0, at - 420);
-    const chunk = t.slice(lo, Math.min(t.length, at + 40));
-    if (/(?:半年|半\s*年)/u.test(chunk) && RE_NATIONAL_CERT_MENTION.test(t.slice(lo, Math.min(t.length, at + 160))))
-      return true;
+    const lo = Math.max(0, at - 120);
+    const before = t.slice(lo, at);
+    const after = t.slice(at, Math.min(t.length, at + 120));
+    const hasHalf = /(?:半年|半\s*年)/u.test(before) || /(?:半年|半\s*年)/u.test(after);
+    if (!hasHalf) continue;
+    const span = before + after;
+    if (/一\s*年/u.test(span)) continue;
+    if (/(?:半年|半\s*年)[\s\S]{0,90}(?:两|2)\s*[张張]/u.test(span)) continue;
+    if (/[四4]\s*[张張]/u.test(span) && /(?:一\s*年|年度|整个年)/u.test(span)) {
+      const fourAt = span.indexOf(span.match(/[四4]\s*[张張]/)?.[0] ?? "");
+      const halfAt = span.search(/(?:半年|半\s*年)/u);
+      if (fourAt >= 0 && halfAt >= 0) {
+        const loIdx = Math.min(fourAt, halfAt);
+        const hiIdx = Math.max(fourAt, halfAt);
+        if (/一\s*年|年度|整个年/u.test(span.slice(loIdx, hiIdx))) continue;
+      }
+    }
+    if (RE_NATIONAL_CERT_MENTION.test(t.slice(lo, Math.min(t.length, at + 160)))) return true;
   }
   return false;
 }
@@ -504,8 +684,7 @@ const RULES = [
     message:
       "**科特·图形化** 首张节奏为 **约 3 个月 YCL 一级**，不宜写成 **4 个月** 却对接 **任意 YCL 等级**（含 ycl1级、YCL6级、七级、ycl12 等）。若步骤 1 已选科特线+图形化，逐字稿未写「科特」字样时仍按此口径比对。",
     test: (t, st) =>
-      (koteScratchContext(t) || declaredKoteScratch(st)) &&
-      matchNearScratchYcl(t, RE_MONTH_4, RE_YCL_ANY_LEVEL, 200),
+      (koteScratchContext(t) || declaredKoteScratch(st)) && matchKoteScratchFourMonthAnyYcl(t),
     penalty: { learning: 0.15, competition: 0.55, qna: 0.35 },
   },
   {
@@ -515,10 +694,7 @@ const RULES = [
     message:
       "**科特·图形化** 首张节奏为 **约 3 个月 YCL 一级**，不宜写成 **3 个月** 却对接 **非一级** 的任意等级（含二级～九级、十级、ycl8级 等）。若步骤 1 已选科特线+图形化，逐字稿未写「科特」字样时仍按此口径比对。",
     test: (t, st) =>
-      (koteScratchContext(t) || declaredKoteScratch(st)) &&
-      matchNearBidirectional(t, RE_MONTH_3, RE_YCL_LEVEL_NOT_1, 200, {
-        rejectWindow: (c) => windowIsPythonYclExam(c) || windowIsKoteScratchYearRoadmap(c),
-      }),
+      (koteScratchContext(t) || declaredKoteScratch(st)) && matchKoteScratchThreeMonthNotLevel1(t),
     penalty: { learning: 0.15, competition: 0.55, qna: 0.35 },
   },
   {
@@ -584,8 +760,7 @@ const RULES = [
     test: (t) =>
       !certOverclaimNegation(t) &&
       RE_NATIONAL_CERT_MENTION.test(t) &&
-      (matchNearBidirectional(t, RE_HALF_YEAR_CERT, RE_CERT_SHEETS_3_PLUS_IN_HALF_YEAR, 320) ||
-        certHalfYearThreePlusNationalScan(t)),
+      certHalfYearThreePlusNationalScan(t),
     penalty: { learning: 0.32, competition: 0.42, qna: 0.3 },
   },
   {
