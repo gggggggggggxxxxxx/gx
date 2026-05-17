@@ -3,7 +3,6 @@ import express from "express";
 import { createClient } from "@libsql/client";
 import path from "path";
 import { fileURLToPath } from "url";
-
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.join(__dirname, "..");
 

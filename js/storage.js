@@ -30,10 +30,19 @@ export function usesRemotePersistence() {
   return useRemoteApi();
 }
 
-function buildApiUrl(path) {
+export function buildApiUrl(path) {
   const base = apiPrefix();
   if (base === "") return path;
   return `${base}${path}`;
+}
+
+/** 与 POST /api/records 共用的写入鉴权头 */
+export function getWriteHeaders() {
+  const headers = { "Content-Type": "application/json" };
+  const fromWin =
+    typeof window !== "undefined" ? String(window.__PPAIS_WRITE_TOKEN__ || "").trim() : "";
+  if (fromWin) headers["X-Write-Token"] = fromWin;
+  return headers;
 }
 
 function loadRecordsLocal() {
@@ -72,12 +81,9 @@ export async function saveRecord(record, opts = {}) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
     return;
   }
-  const headers = { "Content-Type": "application/json" };
+  const headers = getWriteHeaders();
   const fromOpts = String(opts.writeToken ?? "").trim();
-  const fromWin =
-    typeof window !== "undefined" ? String(window.__PPAIS_WRITE_TOKEN__ || "").trim() : "";
-  const wt = fromOpts || fromWin;
-  if (wt) headers["X-Write-Token"] = wt;
+  if (fromOpts) headers["X-Write-Token"] = fromOpts;
   const r = await fetch(buildApiUrl("/api/records"), {
     method: "POST",
     headers,

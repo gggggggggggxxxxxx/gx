@@ -1,3 +1,4 @@
+import { chinaFilenameStamp, formatDateTimeChina } from "./dateFormat.js";
 import { GRADES, TRACK_LINES, COURSE_STAGES, PROVINCES, citiesForProvince } from "./data.js";
 import { pickParentQuestions } from "./questions.js";
 import { scoreAssessment } from "./scoring.js";
@@ -262,7 +263,7 @@ async function persistAssessmentRecord() {
   }
 }
 
-async function onRunScore() {
+function onRunScore() {
   const infoErr = validateInfo();
   if (infoErr) return toast(infoErr);
 
@@ -272,13 +273,16 @@ async function onRunScore() {
   }
   const script = els.scriptText.value.trim();
   const student = getStudent();
-  lastScorePayload = { script, student, answers, questions: currentQuestions.map((q) => q.text) };
+  const questions = currentQuestions.map((q) => q.text);
+  lastScorePayload = { script, student, answers, questions };
+
   lastResult = scoreAssessment({ script, student, answers });
+
   recordSaved = false;
   renderResult(lastResult);
   els.saveStatus.textContent = "正在保存考核记录…";
   showStep("result");
-  await persistAssessmentRecord();
+  void persistAssessmentRecord();
 }
 
 function renderResult(res) {
@@ -309,6 +313,7 @@ function renderResult(res) {
       ${barRow("赛考规划", competition, 10)}
       ${barRow("答疑能力", qna, 10)}
     </div>
+    ${scoreExplainSummaryHtml(detail)}
   `;
 
   const blocks = [
@@ -330,6 +335,37 @@ function renderResult(res) {
     ${courseKbCard}
     ${blocks.join("")}
   `;
+}
+
+function dimOneLiner(d) {
+  const missed = d?.displayMissed || [];
+  if (missed.length === 0) {
+    const hitCount = (d?.hits || []).filter((h) => h.met && h.delta > 0).length;
+    return hitCount >= 4 ? "主要量规项已覆盖" : "部分量规项待加强";
+  }
+  return missed
+    .slice(0, 2)
+    .map((m) => m.label.replace(/量规.*/, "").slice(0, 28))
+    .join("；");
+}
+
+function scoreExplainSummaryHtml(detail) {
+  const rows = [
+    ["学习规划", detail.learning],
+    ["赛考规划", detail.competition],
+    ["答疑能力", detail.qna],
+  ];
+  const body = rows
+    .map(
+      ([label, d]) =>
+        `<tr><td>${escapeHtml(label)}</td><td class="num">${Number(d.score).toFixed(2)}</td><td class="hint">${escapeHtml(dimOneLiner(d))}</td></tr>`
+    )
+    .join("");
+  return `
+    <table class="score-explain-table" aria-label="分项计分摘要">
+      <thead><tr><th>维度</th><th>得分</th><th>要点</th></tr></thead>
+      <tbody>${body}</tbody>
+    </table>`;
 }
 
 function barRow(label, value, max) {
@@ -588,7 +624,7 @@ async function getSelectedRecordsOrdered() {
 async function exportAdminJson() {
   const rows = await getSelectedRecordsOrdered();
   if (!rows.length) return toast("请先勾选要导出的记录。");
-  const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+  const stamp = chinaFilenameStamp();
   const text = JSON.stringify(rows, null, 2);
   downloadBlob(`编程规划考核导出_${rows.length}条_${stamp}.json`, text, "application/json;charset=utf-8");
   toast(`已下载 JSON，共 ${rows.length} 条。`);
@@ -636,7 +672,7 @@ async function exportAdminCsv() {
     const as = Array.isArray(r.answers) ? r.answers : [];
     const row = [
       r.id,
-      r.createdAt,
+      formatDateTimeChina(r.createdAt),
       t.name,
       t.city,
       s.name,
@@ -665,7 +701,7 @@ async function exportAdminCsv() {
     lines.push(row.map(csvEscape).join(","));
   }
 
-  const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+  const stamp = chinaFilenameStamp();
   const bom = "\uFEFF";
   downloadBlob(`编程规划考核导出_${rows.length}条_${stamp}.csv`, bom + lines.join("\r\n"), "text/csv;charset=utf-8");
   toast(`已下载 CSV，共 ${rows.length} 条（UTF-8，可用 Excel 打开）。`);
@@ -764,7 +800,7 @@ function adminRecordHtml(r) {
         <div class="head-main">
           <header>
             <span>${escapeHtml(t.name || "")} · ${escapeHtml(t.city || "")}</span>
-            <span class="meta">${escapeHtml(r.createdAt || "")}</span>
+            <span class="meta" title="${escapeAttr(r.createdAt || "")}">${escapeHtml(formatDateTimeChina(r.createdAt))}</span>
           </header>
           <div class="meta">
             学员：${escapeHtml(s.name || "")} / ${escapeHtml(String(s.age || ""))}岁 / ${escapeHtml(s.gender || "")} /

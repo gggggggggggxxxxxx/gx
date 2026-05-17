@@ -32,7 +32,7 @@
       <section class="card step-panel" id="step-info" data-step="1">
         <div class="step-badge">步骤 1 / 4</div>
         <h2>信息录入</h2>
-        <p class="muted">请填写考核老师与学员基本信息，用于个性化评审、政策语境匹配及<strong>课程口径审计</strong>（所选线路与阶段决定哪些「产品与赛考」校验规则生效；图形化稿内可写 Python、C++ 升学衔接，步骤 1 仍选本次主线）。</p>
+        <p class="muted">请填写考核老师与学员基本信息，用于个性化评审、政策语境匹配</p>
 
         <fieldset class="fieldset">
           <legend>考核老师</legend>
@@ -64,7 +64,6 @@
               <select id="student-gender" required>
                 <option value="男">男</option>
                 <option value="女">女</option>
-                <option value="不愿透露">不愿透露</option>
               </select>
             </label>
             <label class="field">
@@ -88,9 +87,6 @@
               <select id="student-course-stage" required aria-describedby="hint-track-stage"></select>
             </label>
           </div>
-          <p class="muted small" id="hint-track-stage" style="margin:0 0 12px;">
-            请按本稿<strong>主线</strong>选择：例如主推科特科技特长生图形化则选「科特线 + 图形化」。逐字稿中规划到 Python、C++ 属于正常升学衔接，无需另选阶段。
-          </p>
         </fieldset>
 
         <div class="actions">
@@ -137,7 +133,7 @@
       <section class="card step-panel hidden" id="step-result" data-step="4">
         <div class="step-badge">步骤 4 / 4</div>
         <h2>智能评分与反馈</h2>
-        <p class="muted">以下结果依据内置严苛量规与地区政策关键词库自动分析生成，仅供培训师考核参考。</p>
+        <p class="muted">以下结果由本地量规引擎与课程口径审计自动生成，仅供培训师考核参考。</p>
 
         <div class="score-board" id="score-board"></div>
         <div class="feedback-columns" id="feedback-detail"></div>
