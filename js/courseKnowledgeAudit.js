@@ -106,8 +106,16 @@ function normalizeStudentChoice(student) {
  * 在全文内判断 reA 与 reB 是否出现在同一「窗口」内（解决按句号拆句后，「4 个月」与「ycl1」被拆到两句而漏检）。
  * 窗口为 **锚点前后各 span 字**（共约 2×span），避免「4 张」在「半年」之前时仅向前切片导致漏检。
  */
-function matchNearBidirectional(text, reA, reB, span = 180) {
+/**
+ * @param {string} text
+ * @param {RegExp} reA
+ * @param {RegExp} reB
+ * @param {number} [span]
+ * @param {{ rejectWindow?: (chunk: string) => boolean }} [opts]
+ */
+function matchNearBidirectional(text, reA, reB, span = 180, opts = {}) {
   const t = normalizeAuditText(text);
+  const rejectWindow = opts.rejectWindow;
   const hasA = new RegExp(reA.source, reA.flags.replace(/y/g, "")).test(t);
   const hasB = new RegExp(reB.source, reB.flags.replace(/y/g, "")).test(t);
   if (!hasA || !hasB) return false;
@@ -119,12 +127,22 @@ function matchNearBidirectional(text, reA, reB, span = 180) {
       const lo = Math.max(0, m.index - span);
       const hi = Math.min(t.length, m.index + span);
       const chunk = t.slice(lo, hi);
+      if (rejectWindow && rejectWindow(chunk)) continue;
       if (new RegExp(secondary.source, secondary.flags.replace(/y/g, "")).test(chunk)) return true;
     }
     return false;
   };
 
   return walk(reA, reB) || walk(reB, reA);
+}
+
+/** 窗口内为 Python 赛考节奏（避免图形化「3 个月×等级」规则误伤「Python…三个月后 YCL 四级」等） */
+function windowIsPythonYclExam(chunk) {
+  return /[Pp]ython/u.test(chunk) && /YCL|ycl/u.test(chunk);
+}
+
+function matchNearScratchYcl(text, reA, reB, span = 200) {
+  return matchNearBidirectional(text, reA, reB, span, { rejectWindow: windowIsPythonYclExam });
 }
 
 /**
@@ -383,7 +401,7 @@ const RULES = [
       "**思维·图形化** 半年赛考里程碑为 **约 4 个月 YCL 一级**，不应把节奏写成 **3 个月** 却对接 **任意 YCL 等级**（含六级、七级、八级、十级、ycl12 等）。易与科特图形化「约 3 个月一级」混淆。若步骤 1 已选思维线+图形化，逐字稿未写「思维」字样时仍按此口径比对。",
     test: (t, st) =>
       (thinkScratchContext(t) || declaredThinkScratch(st)) &&
-      matchNearBidirectional(t, RE_MONTH_3, RE_YCL_ANY_LEVEL, 200),
+      matchNearScratchYcl(t, RE_MONTH_3, RE_YCL_ANY_LEVEL, 200),
     penalty: { learning: 0.2, competition: 0.6, qna: 0.35 },
   },
   {
@@ -394,7 +412,7 @@ const RULES = [
       "**思维·图形化** 约 **4 个月** 应对齐 **YCL 一级**，不应在同一节奏里写成 **非一级** 的任意等级（含二级～九级、十级、ycl6、YCL11级 等）。若步骤 1 已选思维线+图形化，逐字稿未写「思维」字样时仍按此口径比对。",
     test: (t, st) =>
       (thinkScratchContext(t) || declaredThinkScratch(st)) &&
-      matchNearBidirectional(t, RE_MONTH_4, RE_YCL_LEVEL_NOT_1, 200),
+      matchNearScratchYcl(t, RE_MONTH_4, RE_YCL_LEVEL_NOT_1, 200),
     penalty: { learning: 0.15, competition: 0.55, qna: 0.35 },
   },
   {
@@ -405,7 +423,7 @@ const RULES = [
       "**科特·图形化** 首张节奏为 **约 3 个月 YCL 一级**，不宜写成 **4 个月** 却对接 **任意 YCL 等级**（含 ycl1级、YCL6级、七级、ycl12 等）。若步骤 1 已选科特线+图形化，逐字稿未写「科特」字样时仍按此口径比对。",
     test: (t, st) =>
       (koteScratchContext(t) || declaredKoteScratch(st)) &&
-      matchNearBidirectional(t, RE_MONTH_4, RE_YCL_ANY_LEVEL, 200),
+      matchNearScratchYcl(t, RE_MONTH_4, RE_YCL_ANY_LEVEL, 200),
     penalty: { learning: 0.15, competition: 0.55, qna: 0.35 },
   },
   {
@@ -416,7 +434,7 @@ const RULES = [
       "**科特·图形化** 首张节奏为 **约 3 个月 YCL 一级**，不宜写成 **3 个月** 却对接 **非一级** 的任意等级（含二级～九级、十级、ycl8级 等）。若步骤 1 已选科特线+图形化，逐字稿未写「科特」字样时仍按此口径比对。",
     test: (t, st) =>
       (koteScratchContext(t) || declaredKoteScratch(st)) &&
-      matchNearBidirectional(t, RE_MONTH_3, RE_YCL_LEVEL_NOT_1, 200),
+      matchNearScratchYcl(t, RE_MONTH_3, RE_YCL_LEVEL_NOT_1, 200),
     penalty: { learning: 0.15, competition: 0.55, qna: 0.35 },
   },
   {

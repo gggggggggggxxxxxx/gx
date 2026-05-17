@@ -132,4 +132,11 @@ describe("auditCourseKnowledge — 线路过滤", () => {
     const script = "科特图形化4个月ycl1级。";
     assertExcludes(ids(script, "", think), "ycl-kote-scratch-4m-l1", "kote rule filtered");
   });
+
+  it("科特·图形化：稿内 Python「三个月后 YCL 四级」不误触图形化 3 月×非一级", () => {
+    const koteScratch = { trackLine: "科特线", courseStage: "图形化" };
+    const script =
+      "孩子跟着我学习三个月就会达到YCL一级的考级水平。在Python第一阶段的学习中，三个月后孩子就能达到YCL四级的考级水平。";
+    assertExcludes(ids(script, "", koteScratch), "ycl-kote-scratch-3m-not-l1", "python 3m L4 not scratch");
+  });
 });
