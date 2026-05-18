@@ -283,7 +283,6 @@ export function buildTraineeFeedback(res) {
     return {
       priorityIssues: pickPriorityIssues(d, 3),
       strengths: pickStrengths(d, 2),
-      moreIssues: (d.issues || []).map(humanizeIssue).filter(Boolean),
     };
   };
 

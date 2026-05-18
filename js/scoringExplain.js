@@ -4,7 +4,7 @@
 
 import { scriptHasOfficialExamRoadmap } from "./courseExamKnowledge.js";
 import { runRubric, topMissedForDisplay } from "./rubricEngine.js";
-import { clamp, scriptBindsStudentRegion, tierLabel } from "./scoringShared.js";
+import { clamp, scriptBindsStudentRegion } from "./scoringShared.js";
 
 function countHits(text, patterns) {
   return patterns.reduce((acc, re) => acc + (re.test(text) ? 1 : 0), 0);
@@ -186,7 +186,6 @@ export function explainLearning(script, student) {
 
   return {
     ...result,
-    tier: tierLabel(result.score),
     displayMissed: topMissedForDisplay(result.missed, result.capReasons, 3),
   };
 }
@@ -341,7 +340,6 @@ export function explainCompetition(script, student) {
 
   return {
     ...result,
-    tier: tierLabel(result.score),
     displayMissed: topMissedForDisplay(result.missed, result.capReasons, 3),
   };
 }
@@ -469,7 +467,6 @@ export function explainQna(combinedAnswers, student) {
 
   return {
     ...result,
-    tier: tierLabel(result.score),
     displayMissed: topMissedForDisplay(result.missed, result.capReasons, 3),
   };
 }
@@ -483,7 +480,6 @@ export function attachExplain(dim, explain) {
     strengths,
     issues,
     hits: explain.hits,
-    missed: explain.missed,
     capReasons: explain.capReasons,
     displayMissed: explain.displayMissed,
   };

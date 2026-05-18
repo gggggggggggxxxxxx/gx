@@ -13,3 +13,6 @@ Thumbs.db
 Desktop.ini
 .DS_Store
 *.log
+
+# 本地排查脚本产物（勿提交）
+scripts/_*.json

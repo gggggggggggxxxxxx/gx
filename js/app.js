@@ -1,4 +1,8 @@
-import { chinaFilenameStamp, formatDateTimeChina } from "./dateFormat.js";
+import {
+  chinaFilenameStamp,
+  formatDateTimeChina,
+  isCreatedAtInChinaYmdRange,
+} from "./dateFormat.js";
 import { GRADES, TRACK_LINES, COURSE_STAGES, PROVINCES, citiesForProvince } from "./data.js";
 import { pickParentQuestions } from "./questions.js";
 import { ensureTraineeFeedback, humanizeIssue } from "./feedbackDisplay.js";
@@ -480,21 +484,52 @@ async function onAdminLogin(e) {
 function getAdminFilterInputs() {
   const n = document.getElementById("admin-filter-name");
   const c = document.getElementById("admin-filter-city");
+  const df = document.getElementById("admin-filter-date-from");
+  const dt = document.getElementById("admin-filter-date-to");
   return {
     name: (n && n.value.trim()) || "",
     city: (c && c.value.trim()) || "",
+    dateFrom: (df && df.value.trim()) || "",
+    dateTo: (dt && dt.value.trim()) || "",
   };
 }
 
-function filterRecordsByTeacher(list, nameQ, cityQ) {
+function adminFilterDateRangeInvalid(dateFrom, dateTo) {
+  return Boolean(dateFrom && dateTo && dateFrom > dateTo);
+}
+
+function filterAdminRecords(list, { name, city, dateFrom, dateTo }) {
+  if (adminFilterDateRangeInvalid(dateFrom, dateTo)) return [];
   return list.filter((r) => {
     const t = r.teacher || {};
     const tn = String(t.name || "");
     const tc = String(t.city || "");
-    if (nameQ && !tn.includes(nameQ)) return false;
-    if (cityQ && !tc.includes(cityQ)) return false;
+    if (name && !tn.includes(name)) return false;
+    if (city && !tc.includes(city)) return false;
+    if (!isCreatedAtInChinaYmdRange(r.createdAt, dateFrom, dateTo)) return false;
     return true;
   });
+}
+
+function formatAdminStats(allCount, filteredCount, selectedCount, filters) {
+  const { dateFrom, dateTo } = filters;
+  let text = `共 ${allCount} 条存档 · 当前筛选 ${filteredCount} 条 · 已勾选 ${selectedCount} 条（导出以勾选为准）`;
+  if (dateFrom || dateTo) {
+    const from = dateFrom || "…";
+    const to = dateTo || "…";
+    text += ` · 时间：${from}～${to}（中国时区）`;
+  }
+  if (adminFilterDateRangeInvalid(dateFrom, dateTo)) {
+    return `开始日期不能晚于结束日期 · ${text}`;
+  }
+  return text;
+}
+
+function adminListEmptyMessage(filters) {
+  if (adminFilterDateRangeInvalid(filters.dateFrom, filters.dateTo)) {
+    return "开始日期不能晚于结束日期，请调整后再试。";
+  }
+  return "没有符合筛选条件的记录，请调整姓名、城市或日期。";
 }
 
 /** 仅刷新列表与统计条，不重建筛选输入框（避免输入时丢焦点） */
@@ -505,16 +540,21 @@ async function refreshAdminRecordList() {
   const all = await loadRecords();
   if (!all.length) return;
 
-  const { name, city } = getAdminFilterInputs();
-  const filtered = filterRecordsByTeacher(all, name, city);
+  const filters = getAdminFilterInputs();
+  const filtered = filterAdminRecords(all, filters);
 
   listEl.innerHTML = filtered.length
     ? filtered.map((r) => adminRecordHtml(r)).join("")
-    : "<p class=\"muted\">没有符合筛选条件的记录，请调整关键字。</p>";
+    : `<p class="muted">${escapeHtml(adminListEmptyMessage(filters))}</p>`;
 
   const statsEl = els.adminRecords.querySelector(".admin-stats");
   if (statsEl) {
-    statsEl.textContent = `共 ${all.length} 条存档 · 当前筛选 ${filtered.length} 条 · 已勾选 ${adminSelectedIds.size} 条（导出以勾选为准）`;
+    statsEl.textContent = formatAdminStats(
+      all.length,
+      filtered.length,
+      adminSelectedIds.size,
+      filters
+    );
   }
 }
 
@@ -538,6 +578,14 @@ async function renderAdminRecords() {
           <span>筛选 · 所在城市（模糊）</span>
           <input type="text" id="admin-filter-city" value="${escapeAttr(prev.city)}" placeholder="例如：郑州" autocomplete="off" />
         </label>
+        <label class="field full">
+          <span>筛选 · 开始日期（中国时区）</span>
+          <input type="date" id="admin-filter-date-from" value="${escapeAttr(prev.dateFrom)}" />
+        </label>
+        <label class="field full">
+          <span>筛选 · 结束日期</span>
+          <input type="date" id="admin-filter-date-to" value="${escapeAttr(prev.dateTo)}" />
+        </label>
       </div>
       <div class="admin-actions">
         <button type="button" class="btn btn-ghost btn-sm" id="admin-select-filtered">全选当前列表</button>
@@ -559,9 +607,9 @@ async function onAdminPanelClick(e) {
 
   if (t.id === "admin-select-filtered") {
     const all = await loadRecords();
-    const { name, city } = getAdminFilterInputs();
+    const filters = getAdminFilterInputs();
     adminSelectedIds.clear();
-    filterRecordsByTeacher(all, name, city).forEach((r) => adminSelectedIds.add(r.id));
+    filterAdminRecords(all, filters).forEach((r) => adminSelectedIds.add(r.id));
     await renderAdminRecords();
     toast(`已勾选当前筛选列表中的 ${adminSelectedIds.size} 条。`);
     return;
@@ -591,12 +639,22 @@ function onAdminPanelChange(e) {
     if (t.checked) adminSelectedIds.add(id);
     else adminSelectedIds.delete(id);
     void updateAdminStatsOnly();
+    return;
+  }
+  if (t.id === "admin-filter-date-from" || t.id === "admin-filter-date-to") {
+    void refreshAdminRecordList();
   }
 }
 
 function onAdminPanelInput(e) {
   const t = e.target;
-  if (t.id !== "admin-filter-name" && t.id !== "admin-filter-city") return;
+  const filterIds = [
+    "admin-filter-name",
+    "admin-filter-city",
+    "admin-filter-date-from",
+    "admin-filter-date-to",
+  ];
+  if (!filterIds.includes(t.id)) return;
   clearTimeout(adminFilterDebounce);
   adminFilterDebounce = setTimeout(() => {
     void refreshAdminRecordList();
@@ -608,9 +666,9 @@ async function updateAdminStatsOnly() {
   if (!el) return;
   const all = await loadRecords();
   if (!all.length) return;
-  const { name, city } = getAdminFilterInputs();
-  const filtered = filterRecordsByTeacher(all, name, city);
-  el.textContent = `共 ${all.length} 条存档 · 当前筛选 ${filtered.length} 条 · 已勾选 ${adminSelectedIds.size} 条（导出以勾选为准）`;
+  const filters = getAdminFilterInputs();
+  const filtered = filterAdminRecords(all, filters);
+  el.textContent = formatAdminStats(all.length, filtered.length, adminSelectedIds.size, filters);
 }
 
 async function getSelectedRecordsOrdered() {
