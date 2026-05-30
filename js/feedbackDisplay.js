@@ -28,6 +28,8 @@ const CAP_PLAIN = {
     "答疑最高约 8.5 分：篇幅建议更充分，并预判家长可能的追问或顾虑。",
   "cap.convert":
     "答疑要冲满分：需同时做到「预判后续追问」和「把顾虑转化为可接受的规划建议」。",
+  "cap.script_none":
+    "画像匹配得分受限：逐字稿中姓名、年龄、城市均未出现，请至少绑定其中两项。",
 };
 
 /** 检查项 / 原文 → 人话（键为完整原文或前缀） */
@@ -47,7 +49,11 @@ const ISSUE_PLAIN = [
   ],
   [
     "几乎未绑定学员个体信息",
-    "请结合本学员的姓名、年龄、年级或课堂表现来写，体现一对一沟通。",
+    "请结合本学员的年级或课堂表现来写，体现一对一沟通（姓名/年龄/城市见「画像匹配」维度）。",
+  ],
+  [
+    "几乎未绑定学员年级或个体称呼",
+    "请结合本学员的年级或「咱们家孩子」等称呼来写，体现一对一沟通。",
   ],
   [
     "缺少学情或表现侧写",
@@ -130,6 +136,11 @@ const ISSUE_PLAIN = [
     "请预判家长可能追问的情景（如退费、换班、备赛压力），并提前回应。",
   ],
   ["答疑未回扣学员画像", "答疑中请点明本学员的年龄、年级或具体情况。"],
+  ["答疑未回扣学员年级或个体称呼", "答疑中请点明本学员的年级或具体情况。"],
+  ["答疑未回扣学员姓名或年龄", "答疑中请点明本学员的姓名或年龄。"],
+  ["逐字稿未出现学员姓名", "请在逐字稿开场或学情段写出学员姓名（全名或名字简称，如「丰源妈妈」）。"],
+  ["逐字稿未明确学员年龄", "请在逐字稿中写清「今年N岁」等年龄表述。"],
+  ["逐字稿未结合学员所在省市", "请在逐字稿中结合学员填写的省/市解读本地政策。"],
   ["空洞保证型短答", "避免「没问题」「放心」等短答；请给出分点、可核实的方案。"],
   [
     "无可执行方案或缺少清晰结构",
@@ -249,10 +260,11 @@ export function humanizeCourseFinding(finding) {
  * @param {number} total
  * @param {unknown[]} [courseFindings]
  */
-export function buildTraineeSummary(L, C, Q, total, courseFindings) {
+export function buildTraineeSummary(L, C, Q, P, total, courseFindings) {
   const parts = [];
+  const profileScore = P?.score ?? 0;
   parts.push(
-    `本次总分 **${total} / 10**（学习 ${L.score}、赛考 ${C.score}、答疑 ${Q.score}，按 4:4:2 加权）。`
+    `本次总分 **${total} / 10**（学习 ${L.score}、赛考 ${C.score}、答疑 ${Q.score}、画像 ${profileScore}，按 35:35:20:10 加权）。`
   );
   if (courseFindings && courseFindings.length > 0) {
     parts.push(
@@ -275,7 +287,7 @@ export function buildTraineeSummary(L, C, Q, total, courseFindings) {
  * @param {object} res scoreAssessment 返回值
  */
 export function buildTraineeFeedback(res) {
-  const { detail, courseKnowledge, total, learning, competition, qna } = res;
+  const { detail, courseKnowledge, total, learning, competition, qna, profile, profileMatch } = res;
   const findings = courseKnowledge?.findings || [];
 
   const dim = (key) => {
@@ -286,17 +298,35 @@ export function buildTraineeFeedback(res) {
     };
   };
 
+  const profileDim = () => {
+    const d = detail.profile || { issues: [], strengths: [] };
+    const base = {
+      priorityIssues: pickPriorityIssues(d, 3),
+      strengths: pickStrengths(d, 2),
+    };
+    if (profileMatch && base.priorityIssues.length < 3) {
+      const hints = profileMatchHints(profileMatch, res.student);
+      for (const h of hints) {
+        if (base.priorityIssues.length >= 3) break;
+        if (!base.priorityIssues.includes(h)) base.priorityIssues.push(h);
+      }
+    }
+    return base;
+  };
+
   return {
     summary: buildTraineeSummary(
       { score: learning },
       { score: competition },
       { score: qna },
+      { score: profile ?? detail.profile?.score ?? 0 },
       total,
       findings
     ),
     learning: dim("learning"),
     competition: dim("competition"),
     qna: dim("qna"),
+    profile: profileDim(),
     courseFindings: findings.map((f) => ({
       id: f.id,
       text: humanizeCourseFinding(f),
@@ -304,6 +334,35 @@ export function buildTraineeFeedback(res) {
     })),
     declarationLabel: "您为学员申报的路径",
   };
+}
+
+/**
+ * @param {{ script: { name: boolean; age: boolean; city: boolean }; qna: { name: boolean; age: boolean } }} pm
+ * @param {{ name?: string }} [student]
+ */
+function profileMatchHints(pm, student) {
+  /** @type {string[]} */
+  const out = [];
+  const name = String(student?.name || "").trim();
+  const given = name.length >= 2 ? name.slice(-2) : name;
+
+  if (!pm.script.city) {
+    out.push("逐字稿请结合学员填写的省/市写本地升学或政策语境。");
+  }
+  if (!pm.script.name) {
+    out.push(
+      name
+        ? `逐字稿请点名学员姓名，可写全名「${name}」或简称「${given}」「${given}妈妈」等。`
+        : "逐字稿请在开场或学情段点名学员姓名。"
+    );
+  }
+  if (!pm.script.age) {
+    out.push("逐字稿请写清学员年龄，如「今年N岁」。");
+  }
+  if (!pm.qna.name && !pm.qna.age) {
+    out.push("答疑中请回扣学员姓名或年龄，体现针对性。");
+  }
+  return out;
 }
 
 /** @param {object} res */

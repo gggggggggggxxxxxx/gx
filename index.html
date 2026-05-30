@@ -152,16 +152,17 @@
       <div class="rules-prose">
         <h3>一、总分构成</h3>
         <ul>
-          <li><strong>学习规划</strong>：单项满分 10 分，权重 <strong>40%</strong></li>
-          <li><strong>赛考规划</strong>：单项满分 10 分，权重 <strong>40%</strong></li>
+          <li><strong>学习规划</strong>：单项满分 10 分，权重 <strong>35%</strong></li>
+          <li><strong>赛考规划</strong>：单项满分 10 分，权重 <strong>35%</strong></li>
           <li><strong>答疑能力</strong>：单项满分 10 分，权重 <strong>20%</strong></li>
+          <li><strong>学员画像匹配</strong>：单项满分 10 分，权重 <strong>10%</strong></li>
         </ul>
-        <p class="muted">最终总分 = 学习规划得分 × 40% + 赛考规划得分 × 40% + 答疑能力得分 × 20%（满分 10 分，保留小数）。三项短板会明显拉低折算分。</p>
+        <p class="muted">最终总分 = 学习规划 × 35% + 赛考规划 × 35% + 答疑能力 × 20% + 画像匹配 × 10%（满分 10 分，保留小数）。任一维度短板会明显拉低折算分。</p>
         <p class="muted">系统会将<strong>逐字稿 + 两道答疑</strong>与内置课程体系口径做一致性扫描：若出现明显矛盾（如思维线图形化写成 60 课时、Python 退费写成前 10 等），会在结果页<strong>单独列出并分项扣分</strong>（各维度累计扣分有封顶）。</p>
         <p class="muted">步骤 1 中学员的<strong>线路 + 阶段</strong>会作为「课程口径审计」的参照：仅启用与该组合相关的校验规则；稿内 Python、C++ 衔接段按对应阶段口径处理，避免与当前图形化主线误配。</p>
 
         <h3>二、学习规划（0–10 分）</h3>
-        <p>侧重：是否具备<strong>清晰分阶段学习路径</strong>、知识点与<strong>项目/作品落地</strong>、是否绑定学员<strong>年级/姓名</strong>、是否有<strong>学情侧写</strong>与<strong>思维/能力</strong>拆解、是否交代<strong>长期升学衔接</strong>（如小升初—中考科特—高考/强基等）及机构课程语境。</p>
+        <p>侧重：是否具备<strong>清晰分阶段学习路径</strong>、知识点与<strong>项目/作品落地</strong>、是否绑定学员<strong>年级/称呼</strong>、是否有<strong>学情侧写</strong>与<strong>思维/能力</strong>拆解、是否交代<strong>长期升学衔接</strong>（如小升初—中考科特—高考/强基等）及机构课程语境。姓名、年龄、城市的精确绑定见「学员画像匹配」维度。</p>
         <p><strong>考试收紧（与系统实现一致）：</strong></p>
         <ul>
           <li>须出现对学员的<strong>显式短板/薄弱点/不足之处</strong>等诊断表述；若仅有表扬、无不足诊断，该项<strong>封顶 8.5 分</strong>。</li>
@@ -174,9 +175,19 @@
         <p><strong>考试收紧：</strong>在谈升学、校情、认定时，须出现<strong>合规锚点</strong>类表述（如以<strong>当年官方简章为准</strong>、政策<strong>核实/动态变化</strong>、<strong>最终以</strong>主管部门或学校认定为准等）。缺少此类表述时，该项<strong>封顶 8.5 分</strong>，避免过度承诺。</p>
 
         <h3>四、答疑能力（0–10 分）</h3>
-        <p>侧重：两道「结合逐字稿 +《编程规划》问题文档」的家长追问之<strong>书面作答</strong>：是否有<strong>分点与可执行方案</strong>、是否<strong>共情</strong>、是否给出<strong>节奏/跟踪</strong>、是否预判<strong>后续追问</strong>、是否回扣<strong>学员画像</strong>；空洞「包过」式短答会严重扣分。</p>
+        <p>侧重：两道「结合逐字稿 +《编程规划》问题文档」的家长追问之<strong>书面作答</strong>：是否有<strong>分点与可执行方案</strong>、是否<strong>共情</strong>、是否给出<strong>节奏/跟踪</strong>、是否预判<strong>后续追问</strong>、是否回扣<strong>学员年级或称呼</strong>；空洞「包过」式短答会严重扣分。姓名/年龄的精确绑定见「学员画像匹配」维度。</p>
 
-        <h3>五、档位含义（供自评参考）</h3>
+        <h3>五、学员画像匹配（0–10 分，权重 10%）</h3>
+        <p>侧重：逐字稿与答疑是否绑定步骤 1 填写的学员<strong>姓名</strong>、<strong>年龄</strong>、<strong>城市</strong>。</p>
+        <ul>
+          <li><strong>姓名</strong>：全名或名字简称均可（如「张丰源」↔ 稿内写「丰源」「丰源妈妈」）。</li>
+          <li><strong>年龄</strong>：须以「N岁」「今年N岁」等语境出现，避免误匹配日期或编号。</li>
+          <li><strong>城市</strong>：学员填写的省/市简称均可（如「青岛市」↔ 稿内写「青岛」）。</li>
+          <li>逐字稿须覆盖姓名、年龄、城市；答疑须至少回扣<strong>姓名或年龄</strong>之一；两者均出现可加分。</li>
+          <li>若逐字稿三项均未绑定，画像匹配单项<strong>封顶 5 分</strong>。</li>
+        </ul>
+
+        <h3>六、档位含义（供自评参考）</h3>
         <p class="muted">不合格 0–2 · 一般 3–5 · 良好 6–7 · 优秀 8–9 · 卓越 10。系统按文本信号与上述收紧规则计分，<strong>不等同人工评委</strong>；如对分项有疑问，以培训师现场解读为准。</p>
       </div>
     </section>

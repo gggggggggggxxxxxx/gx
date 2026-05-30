@@ -219,7 +219,7 @@ function buildAssessmentRecord() {
   return {
     id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
     createdAt: new Date().toISOString(),
-    schemaVersion: 2,
+    schemaVersion: 3,
     teacher,
     student,
     script,
@@ -235,10 +235,13 @@ function buildAssessmentRecord() {
       learning: lastResult.learning,
       competition: lastResult.competition,
       qna: lastResult.qna,
+      profile: lastResult.profile,
       tierLearning: lastResult.tierLearning,
       tierCompetition: lastResult.tierCompetition,
       tierQna: lastResult.tierQna,
+      tierProfile: lastResult.tierProfile,
     },
+    profileMatch: lastResult.profileMatch,
     summary: lastResult.trainee?.summary || lastResult.summary,
     feedbackDetail: lastResult.detail,
     scoreResult: cloneForRecord(lastResult),
@@ -296,19 +299,22 @@ function renderResult(res) {
     learning,
     competition,
     qna,
+    profile,
     tierLearning,
     tierCompetition,
     tierQna,
+    tierProfile,
     detail,
     courseKnowledge,
     declaration,
+    profileMatch,
   } = res;
   const trainee = ensureTraineeFeedback(res);
 
   els.scoreBoard.innerHTML = `
     <div class="score-total">
       <div class="big">${total.toFixed(2)}</div>
-      <div class="label">最终总分 / 10<br/><span style="font-size:0.78rem;opacity:.85">学习×40% + 赛考×40% + 答疑×20%</span></div>
+      <div class="label">最终总分 / 10<br/><span style="font-size:0.78rem;opacity:.85">学习×35% + 赛考×35% + 答疑×20% + 画像×10%</span></div>
     </div>
     <p class="score-declaration muted small" style="margin:12px 0 0;text-align:center;line-height:1.5;">
       ${escapeHtml(trainee.declarationLabel || "您为学员申报的路径")}：<strong>${escapeHtml(declaration?.trackLine || "—")}</strong> · <strong>${escapeHtml(declaration?.courseStage || "—")}</strong>
@@ -317,6 +323,7 @@ function renderResult(res) {
       ${barRow("学习规划", learning, 10)}
       ${barRow("赛考规划", competition, 10)}
       ${barRow("答疑能力", qna, 10)}
+      ${barRow("画像匹配", profile, 10)}
     </div>
     ${scoreExplainSummaryHtml(detail, trainee)}
   `;
@@ -325,6 +332,7 @@ function renderResult(res) {
     fb("学习规划", tierLearning, learning, trainee.learning),
     fb("赛考规划", tierCompetition, competition, trainee.competition),
     fb("答疑能力", tierQna, qna, trainee.qna),
+    fb("画像匹配", tierProfile, profile, trainee.profile),
   ];
 
   const courseKbCard =
@@ -332,11 +340,14 @@ function renderResult(res) {
       ? courseKnowledgeCardHtml(courseKnowledge, trainee.courseFindings)
       : "";
 
+  const profileCard = profileMatch ? profileMatchCardHtml(profileMatch) : "";
+
   els.feedbackDetail.innerHTML = `
     <div class="fb-card" style="grid-column:1/-1;background:rgba(61,156,245,0.08);border-color:rgba(61,156,245,0.25);">
       <h3>综合评语</h3>
       <p class="muted" style="margin:0;white-space:pre-wrap;">${formatInlineBold(escapeHtml(trainee.summary))}</p>
     </div>
+    ${profileCard}
     ${courseKbCard}
     ${blocks.join("")}
   `;
@@ -363,6 +374,7 @@ function scoreExplainSummaryHtml(detail, trainee) {
     ["学习规划", detail.learning, trainee?.learning],
     ["赛考规划", detail.competition, trainee?.competition],
     ["答疑能力", detail.qna, trainee?.qna],
+    ["画像匹配", detail.profile, trainee?.profile],
   ];
   const body = rows
     .map(
@@ -408,6 +420,40 @@ function fb(title, tier, score, td) {
 /** 将已转义文本中的 **片段** 转为 <strong>（仅用于本系统生成的固定文案） */
 function formatInlineBold(escaped) {
   return escaped.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+}
+
+function profileMatchCell(hit) {
+  return hit
+    ? '<span class="profile-hit" aria-label="已匹配">✓</span>'
+    : '<span class="profile-miss" aria-label="未匹配">✗</span>';
+}
+
+/** @param {{ script: { name: boolean; age: boolean; city: boolean }; qna: { name: boolean; age: boolean } }} pm */
+function profileMatchCardHtml(pm) {
+  return `
+    <div class="fb-card profile-match-card" style="grid-column:1/-1;">
+      <h3>学员画像匹配明细</h3>
+      <p class="muted" style="margin:0 0 10px;">系统检测逐字稿与答疑是否绑定步骤 1 填写的姓名（全名/简称）、年龄、城市。</p>
+      <table class="profile-match-table" aria-label="画像匹配明细">
+        <thead>
+          <tr><th>范围</th><th>姓名</th><th>年龄</th><th>城市</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>逐字稿</td>
+            <td>${profileMatchCell(pm.script.name)}</td>
+            <td>${profileMatchCell(pm.script.age)}</td>
+            <td>${profileMatchCell(pm.script.city)}</td>
+          </tr>
+          <tr>
+            <td>答疑</td>
+            <td>${profileMatchCell(pm.qna.name)}</td>
+            <td>${profileMatchCell(pm.qna.age)}</td>
+            <td class="muted">—</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>`;
 }
 
 function courseKnowledgeCardHtml(ck, traineeFindings) {
@@ -713,6 +759,7 @@ async function exportAdminCsv() {
     "score_learning",
     "score_competition",
     "score_qna",
+    "score_profile",
     "summary",
     "script_full",
     "question_1",
@@ -722,6 +769,7 @@ async function exportAdminCsv() {
     "tier_learning",
     "tier_competition",
     "tier_qna",
+    "tier_profile",
     "feedback_detail_json",
   ];
 
@@ -749,6 +797,7 @@ async function exportAdminCsv() {
       sc.learning,
       sc.competition,
       sc.qna,
+      sc.profile ?? "",
       r.summary,
       r.script,
       qs[0] || "",
@@ -758,6 +807,7 @@ async function exportAdminCsv() {
       sc.tierLearning ?? "",
       sc.tierCompetition ?? "",
       sc.tierQna ?? "",
+      sc.tierProfile ?? "",
       r.feedbackDetail ? JSON.stringify(r.feedbackDetail) : "",
     ];
     lines.push(row.map(csvEscape).join(","));

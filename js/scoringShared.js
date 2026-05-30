@@ -100,10 +100,11 @@ export function scriptBindsStudentRegion(script, student) {
  * @param {number} total
  * @param {unknown[]} [courseFindings]
  */
-export function buildSummary(L, C, Q, total, courseFindings) {
+export function buildSummary(L, C, Q, P, total, courseFindings) {
   const parts = [];
+  const profileScore = P?.score ?? 0;
   parts.push(
-    `综合判定：最终总分 **${total} / 10**（学习规划 ${L.score}×40% + 赛考规划 ${C.score}×40% + 答疑能力 ${Q.score}×20%）。量规已按「考试收紧档」校准：信息再完整，凡缺学情短板诊断、学习卡点预判或政策合规锚点，学习与赛考单项均不得虚高；与教研范文同档的逐字稿，常见落在约 8–8.5 分区间。`
+    `综合判定：最终总分 **${total} / 10**（学习规划 ${L.score}×35% + 赛考规划 ${C.score}×35% + 答疑能力 ${Q.score}×20% + 画像匹配 ${profileScore}×10%）。量规已按「考试收紧档」校准：信息再完整，凡缺学情短板诊断、学习卡点预判或政策合规锚点，学习与赛考单项均不得虚高；与教研范文同档的逐字稿，常见落在约 8–8.5 分区间。`
   );
   if (courseFindings && courseFindings.length > 0) {
     parts.push(
@@ -156,6 +157,8 @@ export function applyCourseDeductions(learning, competition, qna, courseDeductio
   return { learnScore, compScore, qnaScore };
 }
 
-export function computeWeightedTotal(learnScore, compScore, qnaScore) {
-  return round2(learnScore * 0.4 + compScore * 0.4 + qnaScore * 0.2);
+export function computeWeightedTotal(learnScore, compScore, qnaScore, profileScore = 0) {
+  return round2(
+    learnScore * 0.35 + compScore * 0.35 + qnaScore * 0.2 + profileScore * 0.1
+  );
 }

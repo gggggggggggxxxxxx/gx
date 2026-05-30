@@ -36,6 +36,7 @@ describe("scoreAssessment 烟测", () => {
     assert.ok(Number.isFinite(res.learning));
     assert.ok(Number.isFinite(res.competition));
     assert.ok(Number.isFinite(res.qna));
+    assert.ok(Number.isFinite(res.profile));
     assert.ok(Array.isArray(res.courseKnowledge?.findings));
     assert.ok(res.courseKnowledge?.deductions);
     assert.equal(typeof res.courseKnowledge.deductions.learning, "number");

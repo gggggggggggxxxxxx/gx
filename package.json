@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test tests/courseKnowledgeAudit.test.js tests/rules-and-answers.test.js tests/scoring-smoke.test.js tests/scoring-contract.test.js tests/regionMatch.test.js tests/dateFormat.test.js tests/feedbackDisplay.test.js"
+    "test": "node --test tests/courseKnowledgeAudit.test.js tests/rules-and-answers.test.js tests/scoring-smoke.test.js tests/scoring-contract.test.js tests/regionMatch.test.js tests/studentProfileMatch.test.js tests/dateFormat.test.js tests/feedbackDisplay.test.js"
   },
   "engines": {
     "node": ">=18"

@@ -10,8 +10,10 @@ import {
   attachExplain,
   explainCompetition,
   explainLearning,
+  explainProfileMatch,
   explainQna,
 } from "./scoringExplain.js";
+import { evaluateProfileFields } from "./studentProfileMatch.js";
 import {
   applyCourseDeductions,
   buildSummary,
@@ -51,6 +53,11 @@ export function scoreAssessment(input) {
     scoreQna(combinedAnswers, script, student),
     explainQna(combinedAnswers, student)
   );
+  const profileFields = evaluateProfileFields(script, combinedAnswers, student);
+  const profile = attachExplain(
+    scoreProfileMatch(script, combinedAnswers, student, profileFields),
+    explainProfileMatch(script, combinedAnswers, student, profileFields)
+  );
 
   const courseAudit = auditCourseKnowledge(script, combinedAnswers, student);
   const { findings: courseKnowledgeFindings, totals: courseDeductions } = courseAudit;
@@ -62,21 +69,24 @@ export function scoreAssessment(input) {
     courseDeductions
   );
 
-  const total = computeWeightedTotal(learnScore, compScore, qnaScore);
+  const total = computeWeightedTotal(learnScore, compScore, qnaScore, profile.score);
 
   const result = {
     total,
     learning: learnScore,
     competition: compScore,
     qna: qnaScore,
+    profile: profile.score,
     tierLearning: tierLabel(learnScore),
     tierCompetition: tierLabel(compScore),
     tierQna: tierLabel(qnaScore),
-    summary: buildSummary(learning, competition, qna, total, courseKnowledgeFindings),
+    tierProfile: tierLabel(profile.score),
+    summary: buildSummary(learning, competition, qna, profile, total, courseKnowledgeFindings),
     courseKnowledge: {
       findings: courseKnowledgeFindings,
       deductions: courseDeductions,
     },
+    profileMatch: profileFields,
     declaration: {
       trackLine: student.trackLine || "",
       courseStage: student.courseStage || "",
@@ -85,7 +95,9 @@ export function scoreAssessment(input) {
       learning: learning,
       competition: competition,
       qna: qna,
+      profile: profile,
     },
+    student,
   };
   result.trainee = buildTraineeFeedback(result);
   return result;
@@ -120,9 +132,7 @@ function scoreLearning(script, student) {
   const reShortcoming = /短板|薄弱点|不足之处|待提升|哪里.*(不够|偏弱)|掌握不牢|基础不牢|诊断/u;
 
   const personalized =
-    script.includes(String(student.age)) ||
     script.includes(student.grade || "") ||
-    script.includes(student.name || "") ||
     /咱们家|这位同学|孩子目前|以他|以她|结合.*年级/u.test(script);
 
   if (rePath.test(script)) {
@@ -159,9 +169,9 @@ function scoreLearning(script, student) {
 
   if (personalized) {
     score += 0.95;
-    strengths.push("文本与学员年龄/年级/姓名有一定绑定，体现个性化沟通意识。");
+    strengths.push("文本与学员年级或泛化称呼有一定绑定，体现个性化沟通意识。");
   } else {
-    issues.push("几乎未绑定学员个体信息，个性化不足，上限会被量规压低。");
+    issues.push("几乎未绑定学员年级或个体称呼，个性化不足，上限会被量规压低。");
     score -= 1.5;
   }
 
@@ -333,11 +343,11 @@ function scoreCompetition(script, student) {
   }
 
   if (local) {
-    score += 0.65;
+    score += 0.35;
     strengths.push("文本显式绑定学员所在省份/城市，利于本地政策叙事。");
   } else {
     issues.push("未结合学员所在省市解读本地语境，本地政策颗粒度不足。");
-    score -= 0.7;
+    score -= 0.4;
   }
 
   if (reWorry.test(script)) {
@@ -465,14 +475,12 @@ function scoreQna(combinedAnswers, script, student) {
 
   const bind =
     combinedAnswers.includes(student.grade || "") ||
-    combinedAnswers.includes(student.name || "") ||
-    combinedAnswers.includes(String(student.age)) ||
-    /孩子|学员|同学/u.test(combinedAnswers);
+    /孩子|学员|同学|咱们家|这位/u.test(combinedAnswers);
   if (bind) {
     score += 0.8;
-    strengths.push("答疑内容与学员个体信息有绑定。");
+    strengths.push("答疑内容与学员年级或泛化称呼有绑定。");
   } else {
-    issues.push("答疑未回扣学员画像，针对性一般。");
+    issues.push("答疑未回扣学员年级或个体称呼，针对性一般。");
     score -= 0.8;
   }
 
@@ -506,6 +514,71 @@ function scoreQna(combinedAnswers, script, student) {
     if (score > 9.5) {
       issues.push("未同时满足：主动预判 + 顾虑转化/增值建议，答疑不予满分。");
       score = 9;
+    }
+  }
+
+  score = round2(clamp(score, 0, 10));
+
+  return {
+    score,
+    tier: tierLabel(score),
+    strengths,
+    issues,
+  };
+}
+
+function scoreProfileMatch(script, combinedAnswers, student, profileFields) {
+  const issues = [];
+  const strengths = [];
+  let score = 2.5;
+
+  const fields = profileFields || evaluateProfileFields(script, combinedAnswers, student);
+  const { script: sf, qna: qf } = fields;
+
+  if (sf.name) {
+    score += 2.5;
+    strengths.push("逐字稿中出现学员姓名（全名或简称），体现一对一沟通。");
+  } else {
+    issues.push("逐字稿未出现学员姓名，建议在开场或学情段点名孩子。");
+    score -= 1.5;
+  }
+
+  if (sf.age) {
+    score += 2;
+    strengths.push("逐字稿中以「N岁」等语境绑定学员年龄。");
+  } else {
+    issues.push("逐字稿未明确学员年龄，建议写清「今年N岁」等表述。");
+    score -= 1;
+  }
+
+  if (sf.city) {
+    score += 2.5;
+    strengths.push("逐字稿中绑定学员所在省/市，利于本地政策叙事。");
+  } else {
+    issues.push("逐字稿未结合学员所在省市，本地语境不足。");
+    score -= 1.5;
+  }
+
+  const qnaBind = qf.name || qf.age;
+  if (qnaBind) {
+    score += 1.5;
+    strengths.push("答疑中回扣了学员姓名或年龄。");
+  } else {
+    issues.push("答疑未回扣学员姓名或年龄，针对性偏弱。");
+    score -= 1;
+  }
+
+  if (qf.name && qf.age) {
+    score += 0.5;
+    strengths.push("答疑中同时出现学员姓名与年龄，绑定充分。");
+  }
+
+  score = clamp(score, 0, 10);
+
+  if (!sf.name && !sf.age && !sf.city) {
+    if (score > 5) {
+      issues.push("量规硬性限制：逐字稿姓名、年龄、城市均未绑定，画像匹配封顶 5 分。");
+      score = 5;
     }
   }
 

@@ -359,6 +359,35 @@ body {
   line-height: 1.45;
 }
 
+.profile-match-table {
+  width: 100%;
+  max-width: 420px;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.profile-match-table th,
+.profile-match-table td {
+  padding: 8px 12px;
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+}
+
+.profile-match-table th:first-child,
+.profile-match-table td:first-child {
+  text-align: left;
+}
+
+.profile-hit {
+  color: #2ecc71;
+  font-weight: 700;
+}
+
+.profile-miss {
+  color: #e74c3c;
+  font-weight: 700;
+}
+
 .score-row {
   display: grid;
   grid-template-columns: 100px 1fr 48px;

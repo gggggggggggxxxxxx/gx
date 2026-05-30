@@ -62,6 +62,8 @@ describe("feedbackDisplay", () => {
     assert.ok(res.trainee.summary);
     assert.ok(!res.trainee.summary.includes("量规"));
     assert.ok(Array.isArray(res.trainee.learning.priorityIssues));
+    assert.ok(res.trainee.profile);
+    assert.ok(res.trainee.summary.includes("画像"));
     const rebuilt = buildTraineeFeedback(res);
     assert.equal(rebuilt.summary, res.trainee.summary);
   });

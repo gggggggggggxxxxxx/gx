@@ -5,6 +5,7 @@
 import { scriptHasOfficialExamRoadmap } from "./courseExamKnowledge.js";
 import { runRubric, topMissedForDisplay } from "./rubricEngine.js";
 import { clamp, scriptBindsStudentRegion } from "./scoringShared.js";
+import { evaluateProfileFields } from "./studentProfileMatch.js";
 
 function countHits(text, patterns) {
   return patterns.reduce((acc, re) => acc + (re.test(text) ? 1 : 0), 0);
@@ -32,9 +33,7 @@ export function explainLearning(script, student) {
   const hollow = /没问题|放心好了|肯定能|包过|百分百|随便学学/u;
 
   const personalized =
-    script.includes(String(student.age)) ||
     script.includes(student.grade || "") ||
-    script.includes(student.name || "") ||
     /咱们家|这位同学|孩子目前|以他|以她|结合.*年级/u.test(script);
 
   const hasExplicitGoals = /目标|里程碑|成果|阶段目标|KPI|验收|达成|终极/u.test(script) && rePath.test(script);
@@ -84,12 +83,12 @@ export function explainLearning(script, student) {
       },
       {
         id: "learn.personal",
-        label: "绑定学员画像",
+        label: "绑定学员年级/称呼",
         delta: 0.95,
         failDelta: -1.5,
         test: () => personalized,
-        passNote: "文本与学员年龄/年级/姓名有一定绑定，体现个性化沟通意识。",
-        failNote: "几乎未绑定学员个体信息，个性化不足，上限会被量规压低。",
+        passNote: "文本与学员年级或泛化称呼有一定绑定，体现个性化沟通意识。",
+        failNote: "几乎未绑定学员年级或个体称呼，个性化不足，上限会被量规压低。",
       },
       {
         id: "learn.situation",
@@ -268,8 +267,8 @@ export function explainCompetition(script, student) {
       {
         id: "comp.local",
         label: "本地省市语境",
-        delta: 0.65,
-        failDelta: -0.7,
+        delta: 0.35,
+        failDelta: -0.4,
         test: () => local,
         passNote: "文本显式绑定学员所在省份/城市，利于本地政策叙事。",
         failNote: "未结合学员所在省市解读本地语境，本地政策颗粒度不足。",
@@ -353,9 +352,7 @@ export function explainQna(combinedAnswers, student) {
   const reConvert = /信任|长期|体系|课程|规划|更适合|不建议|理性|优先级/u;
   const bind =
     combinedAnswers.includes(student.grade || "") ||
-    combinedAnswers.includes(student.name || "") ||
-    combinedAnswers.includes(String(student.age)) ||
-    /孩子|学员|同学/u.test(combinedAnswers);
+    /孩子|学员|同学|咱们家|这位/u.test(combinedAnswers);
   const hollowAns = /^[\s\S]{0,40}(没问题|放心|肯定|包过|可以的)[\s\S]{0,40}$/u;
 
   const result = runRubric({
@@ -416,12 +413,12 @@ export function explainQna(combinedAnswers, student) {
       },
       {
         id: "qna.personal",
-        label: "回扣学员画像",
+        label: "回扣学员年级/称呼",
         delta: 0.8,
         failDelta: -0.8,
         test: () => bind,
-        passNote: "答疑内容与学员个体信息有绑定。",
-        failNote: "答疑未回扣学员画像，针对性一般。",
+        passNote: "答疑内容与学员年级或泛化称呼有绑定。",
+        failNote: "答疑未回扣学员年级或个体称呼，针对性一般。",
       },
       {
         id: "qna.hollow",
@@ -461,6 +458,74 @@ export function explainQna(combinedAnswers, student) {
         when: (s) => len >= 80 && len < 180,
         apply: (s) => s - 1,
         note: "答疑偏短，建议分点给出「认知—方案—落地—复盘」结构。",
+      },
+    ],
+  });
+
+  return {
+    ...result,
+    displayMissed: topMissedForDisplay(result.missed, result.capReasons, 3),
+  };
+}
+
+export function explainProfileMatch(script, combinedAnswers, student, profileFields) {
+  const fields = profileFields || evaluateProfileFields(script, combinedAnswers, student);
+  const { script: sf, qna: qf } = fields;
+
+  const result = runRubric({
+    base: 2.5,
+    checks: [
+      {
+        id: "profile.script.name",
+        label: "逐字稿·姓名",
+        delta: 2.5,
+        failDelta: -1.5,
+        test: () => sf.name,
+        passNote: "逐字稿中出现学员姓名（全名或简称），体现一对一沟通。",
+        failNote: "逐字稿未出现学员姓名，建议在开场或学情段点名孩子。",
+      },
+      {
+        id: "profile.script.age",
+        label: "逐字稿·年龄",
+        delta: 2,
+        failDelta: -1,
+        test: () => sf.age,
+        passNote: "逐字稿中以「N岁」等语境绑定学员年龄。",
+        failNote: "逐字稿未明确学员年龄，建议写清「今年N岁」等表述。",
+      },
+      {
+        id: "profile.script.city",
+        label: "逐字稿·城市",
+        delta: 2.5,
+        failDelta: -1.5,
+        test: () => sf.city,
+        passNote: "逐字稿中绑定学员所在省/市，利于本地政策叙事。",
+        failNote: "逐字稿未结合学员所在省市，本地语境不足。",
+      },
+      {
+        id: "profile.qna.bind",
+        label: "答疑·姓名或年龄",
+        delta: 1.5,
+        failDelta: -1,
+        test: () => qf.name || qf.age,
+        passNote: "答疑中回扣了学员姓名或年龄。",
+        failNote: "答疑未回扣学员姓名或年龄，针对性偏弱。",
+      },
+      {
+        id: "profile.qna.both",
+        label: "答疑·姓名+年龄",
+        delta: 0.5,
+        failDelta: 0,
+        test: () => qf.name && qf.age,
+        passNote: "答疑中同时出现学员姓名与年龄，绑定充分。",
+      },
+    ],
+    caps: [
+      {
+        id: "cap.script_none",
+        max: 5,
+        when: () => !sf.name && !sf.age && !sf.city,
+        reason: "量规硬性限制：逐字稿姓名、年龄、城市均未绑定，画像匹配封顶 5 分。",
       },
     ],
   });

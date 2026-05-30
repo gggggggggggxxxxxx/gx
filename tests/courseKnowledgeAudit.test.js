@@ -218,6 +218,18 @@ describe("auditCourseKnowledge — 线路过滤", () => {
     assertExcludes(ids(script, "", koteScratch), "ycl-kote-scratch-3m-not-l1", "同样的 3m L2");
   });
 
+  it("科特·图形化：第二个阶段三个月后考 YCL2（杨洋稿句式）不误触", () => {
+    const koteScratch = { trackLine: "科特线", courseStage: "图形化" };
+    const script =
+      "学习三个月左右的时间，在今年八月左右参加YCL等级考试一级。" +
+      "第一个阶段基本上就学完了，那除了对学习的帮助以外更重要的就是我们的赛考。" +
+      "第二个阶段了，同样的我们图形化的第二个阶段也是半年，" +
+      "落在咱们宝贝跟我们学习到三个月左右的时间，" +
+      "也就是说差不多在明年的一月份左右我们就会带着孩子去考取我们的YCL2级的证书，" +
+      "那再学习三个月的时间，也就是说在四月左右的时间我们会带着宝贝去参加我们的图灵杯。";
+    assertExcludes(ids(script, "", koteScratch), "ycl-kote-scratch-3m-not-l1", "stage2 3m YCL2");
+  });
+
   it("科特·图形化：答疑仅 Python 3月四级路线图不误触", () => {
     const koteScratch = { trackLine: "科特线", courseStage: "图形化" };
     const answers =

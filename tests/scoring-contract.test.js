@@ -33,17 +33,19 @@ describe("scoreAssessment 契约（无金标准）", () => {
       repeatToLength("若后续追问退费，以课程顾问书面政策为准，我们会分点说明节点。", 120),
     ];
     const res = scoreAssessment({ script, student: baseStudent, answers });
-    for (const key of ["learning", "competition", "qna"]) {
+    for (const key of ["learning", "competition", "qna", "profile"]) {
       const d = res.detail[key];
       assert.ok(Array.isArray(d.hits), `${key} hits`);
       assert.ok(Array.isArray(d.displayMissed), `${key} displayMissed`);
       assert.ok(Array.isArray(d.capReasons), `${key} capReasons`);
     }
+    assert.ok(typeof res.profile === "number");
+    assert.ok(res.profileMatch?.script);
   });
 
   it("无短板诊断：学习规划封顶 8.5", () => {
     const script = repeatToLength(
-      "三阶段路径。小明10岁四年级。学情很好进步快。项目作品。思维专注。卡点若跟不上会加练。长期升学体系。核桃课程体系。三个月后YCL一级。",
+      "三阶段路径。小明10岁小学四年级。学情很好进步快。项目作品。思维专注。卡点若跟不上会加练。长期升学体系。核桃课程体系。三个月后YCL一级。",
       850
     );
     const res = scoreAssessment({
@@ -74,18 +76,19 @@ describe("scoreAssessment 契约（无金标准）", () => {
 
   it("赛考：稿写「西安」、学员填「西安市」仍计本地绑定", () => {
     const script = repeatToLength(
-      "三阶段。学情。西安本地科技特长生。YCL图灵杯白名单。三个月后。学员获奖案例。含金量国家级。以官方招生简章为准。",
+      "三阶段。小学四年级学情。小明10岁。西安本地科技特长生。YCL图灵杯白名单。三个月后。学员获奖案例。含金量国家级。以官方招生简章为准。",
       850
     );
     const res = scoreAssessment({
       script,
-      student: { ...baseStudent, province: "陕西省", city: "西安市" },
+      student: { ...baseStudent, name: "小明", province: "陕西省", city: "西安市" },
       answers: [
-        repeatToLength("第一，理解顾虑。第二，建议按周跟踪赛考节奏。", 120),
+        repeatToLength("第一，理解顾虑。小明10岁建议按周跟踪赛考节奏。", 120),
         repeatToLength("若追问退费，以书面政策为准。", 120),
       ],
     });
     assert.ok(res.competition > 7);
+    assert.ok(res.profileMatch.script.city, "profile city should match 西安");
     assert.ok(!res.detail.competition.issues.some((i) => i.includes("本地政策颗粒度不足")));
   });
 
@@ -107,13 +110,14 @@ describe("scoreAssessment 契约（无金标准）", () => {
 
   it("赛考：稿写「青岛」、学员填「青岛市」仍计本地绑定，不触发 7 分封顶", () => {
     const script = repeatToLength(
-      "三阶段路径。学情进步。项目作品。思维逻辑。咱们身处青岛本地，青岛二中科技特长生招生简章为准。" +
+      "三阶段路径。小学四年级学情。小明10岁。项目作品。思维逻辑。咱们身处青岛本地，青岛二中科技特长生招生简章为准。" +
         "YCL一级图灵杯白名单赛事考级。三个月后节点。学员获奖名学员国赛一等奖案例。" +
         "含金量对比国家级择赛性价比。投入认可度担心焦虑。以当年官方招生简章为准。",
       850
     );
     const student = {
       ...baseStudent,
+      name: "小明",
       province: "山东省",
       city: "青岛市",
     };
@@ -121,10 +125,11 @@ describe("scoreAssessment 契约（无金标准）", () => {
       script,
       student,
       answers: [
-        repeatToLength("第一，理解顾虑。第二，建议按周跟踪赛考节奏与复盘。", 120),
+        repeatToLength("第一，理解顾虑。小明10岁建议按周跟踪赛考节奏与复盘。", 120),
         repeatToLength("若追问退费，以书面政策为准，分点说明节点。", 120),
       ],
     });
+    assert.ok(res.profileMatch.script.city, "青岛 should bind 青岛市 in profile");
     assert.ok(
       !res.detail.competition.issues.some((i) => i.includes("本地政策颗粒度不足")),
       "青岛 should bind 青岛市"
