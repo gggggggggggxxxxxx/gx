@@ -23,7 +23,7 @@
       <nav class="header-actions">
         <button type="button" class="btn btn-ghost" id="btn-show-rules">评分规则</button>
         <button type="button" class="btn btn-ghost" id="btn-new-assessment">新建考核</button>
-        <button type="button" class="btn btn-ghost" id="btn-admin-entry">管理员入口</button>
+        <a href="admin.html" class="btn btn-ghost">管理员入口</a>
       </nav>
     </header>
 
@@ -195,23 +195,6 @@
     <footer class="site-footer" id="site-footer">
       <span>编程教培 · 规划话术考核工具</span>
     </footer>
-  </div>
-
-  <!-- Admin modal -->
-  <div class="modal hidden" id="modal-admin" role="dialog" aria-modal="true" aria-labelledby="admin-title">
-    <div class="modal-backdrop" data-close-modal></div>
-    <div class="modal-card modal-card--admin">
-      <h2 id="admin-title">管理员 · 历史考核记录</h2>
-      <form id="admin-login-form" class="admin-login">
-        <label class="field full">
-          <span>管理员密码</span>
-          <input type="password" id="admin-password" autocomplete="current-password" />
-        </label>
-        <button type="submit" class="btn btn-primary">验证并查看</button>
-      </form>
-      <div id="admin-records" class="admin-records hidden"></div>
-      <button type="button" class="btn btn-ghost modal-close" data-close-modal>关闭</button>
-    </div>
   </div>
 
   <script>

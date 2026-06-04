@@ -1,5 +1,6 @@
-const STORAGE_KEY = "ppias_records_v1";
+const STORAGE_KEY = "ppais_records_v1";
 export const ADMIN_PASSWORD = "xrx101";
+export const ADMIN_SESSION_KEY = "ppais_admin_auth_v1";
 
 /** @returns {string|null} null = 仅用本机 localStorage；"" = 同域相对路径；其它为 API 根 URL */
 function apiPrefix() {
@@ -45,6 +46,34 @@ export function getWriteHeaders() {
   return headers;
 }
 
+export function getAdminToken() {
+  if (typeof window === "undefined") return "";
+  const fromWin = String(window.__PPAIS_ADMIN_TOKEN__ || "").trim();
+  if (fromWin) return fromWin;
+  return String(sessionStorage.getItem(`${ADMIN_SESSION_KEY}_tok`) || "").trim();
+}
+
+export function setAdminSession(token) {
+  const tok = String(token || "").trim();
+  if (typeof window !== "undefined") window.__PPAIS_ADMIN_TOKEN__ = tok;
+  sessionStorage.setItem(ADMIN_SESSION_KEY, "1");
+  sessionStorage.setItem(`${ADMIN_SESSION_KEY}_tok`, tok);
+}
+
+export function clearAdminSession() {
+  if (typeof window !== "undefined") delete window.__PPAIS_ADMIN_TOKEN__;
+  sessionStorage.removeItem(ADMIN_SESSION_KEY);
+  sessionStorage.removeItem(`${ADMIN_SESSION_KEY}_tok`);
+}
+
+export function isAdminSessionActive() {
+  return sessionStorage.getItem(ADMIN_SESSION_KEY) === "1" && Boolean(getAdminToken());
+}
+
+function adminHeaders() {
+  return { "X-Admin-Token": getAdminToken() };
+}
+
 function loadRecordsLocal() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -56,15 +85,120 @@ function loadRecordsLocal() {
   }
 }
 
+function recordToSummary(r) {
+  const t = r.teacher || {};
+  const s = r.student || {};
+  const sc = r.scores || {};
+  return {
+    id: r.id,
+    createdAt: r.createdAt,
+    teacher: { name: t.name || "", city: t.city || "" },
+    student: {
+      name: s.name || "",
+      age: s.age ?? "",
+      gender: s.gender || "",
+      grade: s.grade || "",
+      province: s.province || "",
+      city: s.city || "",
+      trackLine: s.trackLine || "",
+      courseStage: s.courseStage || "",
+    },
+    scores: {
+      total: sc.total ?? null,
+      learning: sc.learning ?? null,
+      competition: sc.competition ?? null,
+      qna: sc.qna ?? null,
+      profile: sc.profile ?? null,
+    },
+  };
+}
+
+/**
+ * @param {{ page?: number, pageSize?: number, filters?: { name?: string, city?: string, dateFrom?: string, dateTo?: string } }} opts
+ */
+export async function loadRecordSummaries(opts = {}) {
+  const page = Math.max(1, Number(opts.page) || 1);
+  const pageSize = Math.min(100, Math.max(1, Number(opts.pageSize) || 20));
+  const filters = opts.filters || {};
+
+  if (!useRemoteApi()) {
+    const { isCreatedAtInChinaYmdRange } = await import("./dateFormat.js");
+    const filtered = loadRecordsLocal().filter((r) => {
+      const t = r.teacher || {};
+      const tn = String(t.name || "");
+      const tc = String(t.city || "");
+      const name = String(filters.name || "").trim();
+      const city = String(filters.city || "").trim();
+      const dateFrom = String(filters.dateFrom || "").trim();
+      const dateTo = String(filters.dateTo || "").trim();
+      if (dateFrom && dateTo && dateFrom > dateTo) return false;
+      if (name && !tn.includes(name)) return false;
+      if (city && !tc.includes(city)) return false;
+      if (!isCreatedAtInChinaYmdRange(r.createdAt, dateFrom, dateTo)) return false;
+      return true;
+    });
+    const total = filtered.length;
+    const start = (page - 1) * pageSize;
+    const items = filtered.slice(start, start + pageSize).map(recordToSummary);
+    return { total, page, pageSize, items };
+  }
+
+  const tok = getAdminToken();
+  if (!tok) return { total: 0, page, pageSize, items: [] };
+
+  const params = new URLSearchParams();
+  params.set("page", String(page));
+  params.set("pageSize", String(pageSize));
+  if (filters.name) params.set("name", filters.name);
+  if (filters.city) params.set("city", filters.city);
+  if (filters.dateFrom) params.set("dateFrom", filters.dateFrom);
+  if (filters.dateTo) params.set("dateTo", filters.dateTo);
+
+  const r = await fetch(`${buildApiUrl("/api/records/summary")}?${params}`, {
+    headers: adminHeaders(),
+  });
+  if (!r.ok) {
+    console.error("loadRecordSummaries", r.status);
+    return { total: 0, page, pageSize, items: [] };
+  }
+  const data = await r.json();
+  return {
+    total: Number(data.total) || 0,
+    page: Number(data.page) || page,
+    pageSize: Number(data.pageSize) || pageSize,
+    items: Array.isArray(data.items) ? data.items : [],
+  };
+}
+
+export async function loadRecordById(id) {
+  const rid = String(id || "").trim();
+  if (!rid) return null;
+
+  if (!useRemoteApi()) {
+    return loadRecordsLocal().find((r) => String(r.id) === rid) || null;
+  }
+
+  const tok = getAdminToken();
+  if (!tok) return null;
+
+  const r = await fetch(buildApiUrl(`/api/records/${encodeURIComponent(rid)}`), {
+    headers: adminHeaders(),
+  });
+  if (!r.ok) {
+    console.error("loadRecordById", r.status, rid);
+    return null;
+  }
+  return r.json();
+}
+
 export async function loadRecords() {
   if (!useRemoteApi()) {
     return loadRecordsLocal();
   }
-  const tok =
-    typeof window !== "undefined" ? String(window.__PPAIS_ADMIN_TOKEN__ || "") : "";
+  const tok = getAdminToken();
   if (!tok) return [];
   const r = await fetch(buildApiUrl("/api/records"), {
-    headers: { "X-Admin-Token": tok },
+    headers: adminHeaders(),
   });
   if (!r.ok) {
     console.error("loadRecords", r.status);
@@ -100,11 +234,10 @@ export async function clearAllRecords() {
     localStorage.removeItem(STORAGE_KEY);
     return;
   }
-  const tok =
-    typeof window !== "undefined" ? String(window.__PPAIS_ADMIN_TOKEN__ || "") : "";
+  const tok = getAdminToken();
   if (!tok) return;
   await fetch(buildApiUrl("/api/records"), {
     method: "DELETE",
-    headers: { "X-Admin-Token": tok },
+    headers: adminHeaders(),
   });
 }

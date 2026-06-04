@@ -120,7 +120,30 @@ async function backfillDenormalizedFromPayload() {
   }
 }
 
-await backfillDenormalizedFromPayload();
+async function countRowsNeedingBackfill() {
+  try {
+    const rs = await client.execute(`
+      SELECT COUNT(*) AS c FROM assessment_records
+      WHERE teacher_name IS NULL OR teacher_city IS NULL OR score_total IS NULL
+    `);
+    const row = rs.rows[0];
+    const raw =
+      row && typeof row === "object"
+        ? "c" in row
+          ? row.c
+          : row[0] !== undefined
+            ? row[0]
+            : Object.values(row)[0]
+        : 0;
+    return Number(raw) || 0;
+  } catch {
+    return 1;
+  }
+}
+
+if ((await countRowsNeedingBackfill()) > 0) {
+  await backfillDenormalizedFromPayload();
+}
 
 const app = express();
 
@@ -155,6 +178,157 @@ function requireWrite(req, res) {
   }
   return true;
 }
+
+function cell(row, key, idx = 0) {
+  if (row == null) return undefined;
+  if (typeof row !== "object") return row;
+  if (key in row) return row[key];
+  if (row[idx] !== undefined) return row[idx];
+  return Object.values(row)[idx];
+}
+
+function buildSummaryWhere(query) {
+  const name = String(query.name || "").trim();
+  const city = String(query.city || "").trim();
+  const dateFrom = String(query.dateFrom || "").trim();
+  const dateTo = String(query.dateTo || "").trim();
+  if (dateFrom && dateTo && dateFrom > dateTo) {
+    return { invalidRange: true, where: "", args: [], dateFrom, dateTo };
+  }
+  const clauses = [];
+  const args = [];
+  if (name) {
+    clauses.push("teacher_name LIKE ?");
+    args.push(`%${name.replace(/[%_]/g, "")}%`);
+  }
+  if (city) {
+    clauses.push("teacher_city LIKE ?");
+    args.push(`%${city.replace(/[%_]/g, "")}%`);
+  }
+  if (dateFrom) {
+    clauses.push("date(datetime(created_at, '+8 hours')) >= ?");
+    args.push(dateFrom);
+  }
+  if (dateTo) {
+    clauses.push("date(datetime(created_at, '+8 hours')) <= ?");
+    args.push(dateTo);
+  }
+  const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+  return { invalidRange: false, where, args, dateFrom, dateTo };
+}
+
+function rowToSummary(row) {
+  const num = (v) => {
+    if (v == null || v === "") return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+  return {
+    id: String(cell(row, "id", 0) ?? ""),
+    createdAt: String(cell(row, "created_at", 1) ?? ""),
+    teacher: {
+      name: String(cell(row, "teacher_name", 2) ?? ""),
+      city: String(cell(row, "teacher_city", 3) ?? ""),
+    },
+    student: {
+      name: String(cell(row, "student_name", 5) ?? ""),
+      age: cell(row, "student_age", 6) ?? "",
+      gender: String(cell(row, "student_gender", 7) ?? ""),
+      grade: String(cell(row, "student_grade", 8) ?? ""),
+      province: String(cell(row, "student_province", 9) ?? ""),
+      city: String(cell(row, "student_city", 10) ?? ""),
+      trackLine: String(cell(row, "student_track_line", 11) ?? ""),
+      courseStage: String(cell(row, "student_course_stage", 12) ?? ""),
+    },
+    scores: {
+      total: num(cell(row, "score_total", 4)),
+      learning: num(cell(row, "score_learning", 13)),
+      competition: num(cell(row, "score_competition", 14)),
+      qna: num(cell(row, "score_qna", 15)),
+      profile: num(cell(row, "score_profile", 16)),
+    },
+  };
+}
+
+const SUMMARY_SELECT = `
+  SELECT
+    id,
+    created_at,
+    teacher_name,
+    teacher_city,
+    score_total,
+    json_extract(payload, '$.student.name') AS student_name,
+    json_extract(payload, '$.student.age') AS student_age,
+    json_extract(payload, '$.student.gender') AS student_gender,
+    json_extract(payload, '$.student.grade') AS student_grade,
+    json_extract(payload, '$.student.province') AS student_province,
+    json_extract(payload, '$.student.city') AS student_city,
+    json_extract(payload, '$.student.trackLine') AS student_track_line,
+    json_extract(payload, '$.student.courseStage') AS student_course_stage,
+    json_extract(payload, '$.scores.learning') AS score_learning,
+    json_extract(payload, '$.scores.competition') AS score_competition,
+    json_extract(payload, '$.scores.qna') AS score_qna,
+    json_extract(payload, '$.scores.profile') AS score_profile
+  FROM assessment_records
+`;
+
+app.get("/api/records/summary", async (req, res) => {
+  try {
+    if (!requireAdmin(req, res)) return;
+    const built = buildSummaryWhere(req.query);
+    if (built.invalidRange) {
+      res.json({ total: 0, page: 1, pageSize: 20, items: [] });
+      return;
+    }
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const pageSize = Math.min(100, Math.max(1, Number(req.query.pageSize) || 20));
+    const offset = (page - 1) * pageSize;
+
+    const countRs = await client.execute({
+      sql: `SELECT COUNT(*) AS c FROM assessment_records ${built.where}`,
+      args: built.args,
+    });
+    const total = Number(cell(countRs.rows[0], "c", 0)) || 0;
+
+    const rs = await client.execute({
+      sql: `${SUMMARY_SELECT} ${built.where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+      args: [...built.args, pageSize, offset],
+    });
+    const items = rs.rows.map(rowToSummary);
+    res.json({ total, page, pageSize, items });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: String(e?.message || e) });
+  }
+});
+
+app.get("/api/records/:id", async (req, res) => {
+  try {
+    if (!requireAdmin(req, res)) return;
+    const id = String(req.params.id || "").trim();
+    if (!id) {
+      res.status(400).json({ error: "missing id" });
+      return;
+    }
+    const rs = await client.execute({
+      sql: "SELECT payload FROM assessment_records WHERE id = ?",
+      args: [id],
+    });
+    if (!rs.rows.length) {
+      res.status(404).json({ error: "not found" });
+      return;
+    }
+    const raw = cell(rs.rows[0], "payload", 0);
+    if (typeof raw !== "string") {
+      res.status(500).json({ error: "invalid payload" });
+      return;
+    }
+    res.json(JSON.parse(raw));
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: String(e?.message || e) });
+  }
+});
 
 app.get("/api/records", async (req, res) => {
   try {
