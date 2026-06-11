@@ -1,5 +1,6 @@
 import { chinaFilenameStamp, formatDateTimeChina } from "./dateFormat.js";
 import { ensureTraineeFeedback } from "./feedbackDisplay.js";
+import { profileMatchCardHtml } from "./profileMatchUi.js";
 import {
   ADMIN_PASSWORD,
   clearAdminSession,
@@ -137,7 +138,10 @@ function adminFeedbackDetailSectionHtml(r) {
     learning: sc.learning,
     competition: sc.competition,
     qna: sc.qna,
+    profile: sc.profile,
     total: sc.total,
+    profileMatch: r.profileMatch,
+    student: r.student,
     courseKnowledge: r.scoreResult?.courseKnowledge,
     trainee: r.scoreResult?.trainee,
   });
@@ -148,13 +152,19 @@ function adminFeedbackDetailSectionHtml(r) {
         <p class="muted">本条为升级前存档，未保存分项点评明细。可让老师重新完成考核并保存；管理员仍可查看逐字稿与家长题作答。</p>
       </div>`;
   }
+  const profileMatchBlock =
+    r.profileMatch && sc.profile != null
+      ? profileMatchCardHtml(r.profileMatch, sc.profile, sc.tierProfile || "")
+      : "";
   return `
+    ${profileMatchBlock}
     <div class="detail-block">
       <h4>智能分项点评（详细）</h4>
       <div class="admin-fb-grid">
         ${renderAdminFeedbackDimension("学习规划", trainee.learning, sc.learning)}
         ${renderAdminFeedbackDimension("赛考规划", trainee.competition, sc.competition)}
         ${renderAdminFeedbackDimension("答疑能力", trainee.qna, sc.qna)}
+        ${renderAdminFeedbackDimension("画像匹配", trainee.profile, sc.profile)}
       </div>
     </div>`;
 }
