@@ -360,7 +360,6 @@ function renderResult(res) {
     fb("学习规划", tierLearning, learning, trainee.learning),
     fb("赛考规划", tierCompetition, competition, trainee.competition),
     fb("答疑能力", tierQna, qna, trainee.qna),
-    fb("画像匹配", tierProfile, profile, trainee.profile),
   ];
 
   const courseKbCard =
@@ -368,7 +367,9 @@ function renderResult(res) {
       ? courseKnowledgeCardHtml(courseKnowledge, trainee.courseFindings)
       : "";
 
-  const profileCard = profileMatch ? profileMatchCardHtml(profileMatch) : "";
+  const profileCard = profileMatch
+    ? profileMatchCardHtml(profileMatch, profile, tierProfile)
+    : "";
 
   els.feedbackDetail.innerHTML = `
     <div class="fb-card" style="grid-column:1/-1;background:rgba(61,156,245,0.08);border-color:rgba(61,156,245,0.25);">
@@ -399,16 +400,16 @@ function dimOneLiner(d, traineeDim) {
 
 function scoreExplainSummaryHtml(detail, trainee) {
   const rows = [
-    ["学习规划", detail.learning, trainee?.learning],
-    ["赛考规划", detail.competition, trainee?.competition],
-    ["答疑能力", detail.qna, trainee?.qna],
-    ["画像匹配", detail.profile, trainee?.profile],
+    ["学习规划", detail.learning, trainee?.learning, false],
+    ["赛考规划", detail.competition, trainee?.competition, false],
+    ["答疑能力", detail.qna, trainee?.qna, false],
+    ["画像匹配", detail.profile, trainee?.profile, true],
   ];
   const body = rows
-    .map(
-      ([label, d, td]) =>
-        `<tr><td>${escapeHtml(label)}</td><td class="num">${Number(d.score).toFixed(2)}</td><td class="hint">${escapeHtml(dimOneLiner(d, td))}</td></tr>`
-    )
+    .map(([label, d, td, profileOnlyScore]) => {
+      const hint = profileOnlyScore ? "—" : dimOneLiner(d, td);
+      return `<tr><td>${escapeHtml(label)}</td><td class="num">${Number(d.score).toFixed(2)}</td><td class="hint">${escapeHtml(hint)}</td></tr>`;
+    })
     .join("");
   return `
     <table class="score-explain-table" aria-label="分项计分摘要">
@@ -457,10 +458,12 @@ function profileMatchCell(hit) {
 }
 
 /** @param {{ script: { name: boolean; age: boolean; city: boolean }; qna: { name: boolean; age: boolean } }} pm */
-function profileMatchCardHtml(pm) {
+function profileMatchCardHtml(pm, score, tier) {
+  const scoreStr = Number(score).toFixed(2);
   return `
     <div class="fb-card profile-match-card" style="grid-column:1/-1;">
-      <h3>学员画像匹配明细</h3>
+      <h3>学员画像匹配明细 · ${escapeHtml(scoreStr)} 分</h3>
+      <span class="tier">${escapeHtml(tier || "")}</span>
       <p class="muted" style="margin:0 0 10px;">系统检测逐字稿与答疑是否绑定步骤 1 填写的姓名（全名/简称）、年龄、城市。</p>
       <table class="profile-match-table" aria-label="画像匹配明细">
         <thead>
