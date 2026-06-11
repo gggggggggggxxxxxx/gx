@@ -1,6 +1,6 @@
 import { GRADES, TRACK_LINES, COURSE_STAGES, PROVINCES, citiesForProvince } from "./data.js";
 import { pickParentQuestions } from "./questions.js";
-import { humanizeIssue } from "./feedbackDisplay.js";
+import { ensureTraineeFeedback, humanizeIssue } from "./feedbackDisplay.js";
 import { scoreAssessment } from "./scoring.js";
 import {
   saveRecord,
