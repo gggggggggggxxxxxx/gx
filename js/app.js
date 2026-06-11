@@ -37,6 +37,9 @@ const els = {
 };
 
 let currentQuestions = [];
+let questionsContextKey = "";
+/** @type {Map<string, string>} */
+let savedAnswersByQid = new Map();
 let lastScorePayload = null;
 let lastResult = null;
 let recordSaved = false;
@@ -57,7 +60,7 @@ function init() {
   document.getElementById("btn-to-script").addEventListener("click", onToScript);
   document.getElementById("btn-back-info").addEventListener("click", () => showStep("info"));
   document.getElementById("btn-to-questions").addEventListener("click", onToQuestions);
-  document.getElementById("btn-back-script").addEventListener("click", () => showStep("script"));
+  document.getElementById("btn-back-script").addEventListener("click", onBackToScript);
   document.getElementById("btn-run-score").addEventListener("click", onRunScore);
   document.getElementById("btn-new-assessment").addEventListener("click", resetAll);
   document.getElementById("btn-show-rules").addEventListener("click", showRulesPage);
@@ -70,8 +73,42 @@ function fillSelect(selectEl, options) {
 
 function refreshCitySelect() {
   const p = els.studentProvince.value;
+  const prevCity = els.studentCity.value;
   const cities = citiesForProvince(p);
   fillSelect(els.studentCity, cities);
+  if (prevCity && cities.includes(prevCity)) {
+    els.studentCity.value = prevCity;
+  }
+}
+
+function buildQuestionsContextKey(script, student) {
+  return JSON.stringify({
+    script: String(script || "").trim(),
+    name: student.name,
+    age: student.age,
+    grade: student.grade,
+    province: student.province,
+    city: student.city,
+    trackLine: student.trackLine,
+    courseStage: student.courseStage,
+  });
+}
+
+function snapshotAnswersFromDom() {
+  savedAnswersByQid.clear();
+  for (const a of els.questionsContainer.querySelectorAll(".answer-input")) {
+    const id = a.getAttribute("data-q-id");
+    if (id) savedAnswersByQid.set(id, a.value);
+  }
+}
+
+function restoreAnswersToDom() {
+  for (const a of els.questionsContainer.querySelectorAll(".answer-input")) {
+    const id = a.getAttribute("data-q-id");
+    if (id && savedAnswersByQid.has(id)) {
+      a.value = savedAnswersByQid.get(id);
+    }
+  }
 }
 
 function escapeHtml(s) {
@@ -155,14 +192,30 @@ function onToScript() {
   showStep("script");
 }
 
+function onBackToScript() {
+  snapshotAnswersFromDom();
+  showStep("script");
+}
+
 function onToQuestions() {
   const script = els.scriptText.value.trim();
   if (script.length < MIN_SCRIPT_CHARS) {
     return toast(`逐字稿字数不足：至少需要 ${MIN_SCRIPT_CHARS} 字。`);
   }
   const student = getStudent();
+  const key = buildQuestionsContextKey(script, student);
+
+  snapshotAnswersFromDom();
+
+  if (key === questionsContextKey && currentQuestions.length > 0) {
+    showStep("questions");
+    return;
+  }
+
   currentQuestions = pickParentQuestions({ script, student });
+  questionsContextKey = key;
   renderQuestions();
+  restoreAnswersToDom();
   showStep("questions");
 }
 
@@ -465,6 +518,8 @@ function resetAll() {
   els.scriptText.value = "";
   updateCharCount();
   currentQuestions = [];
+  questionsContextKey = "";
+  savedAnswersByQid.clear();
   lastScorePayload = null;
   lastResult = null;
   recordSaved = false;
